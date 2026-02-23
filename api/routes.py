@@ -107,8 +107,10 @@ def packets_activity():
     rows = models.query_packets_activity(_hours(), bucket)
     return jsonify({
         "timestamps": [r["bucket"] for r in rows],
-        "tx_count": [r["tx_count"] for r in rows],
-        "rx_count": [r["rx_count"] for r in rows],
+        "tx_direct": [r["tx_direct"] for r in rows],
+        "tx_flood": [r["tx_flood"] for r in rows],
+        "rx_direct": [r["rx_direct"] for r in rows],
+        "rx_flood": [r["rx_flood"] for r in rows],
         "total": [r["total"] for r in rows],
     })
 

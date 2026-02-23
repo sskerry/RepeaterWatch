@@ -1,12 +1,19 @@
 var PacketsChart = (function () {
     var chart = null;
 
+    var SERIES = [
+        { name: 'RX Direct',  color: '#06d6a0', stack: 'packets' },
+        { name: 'RX Flood',   color: '#90e0c0', stack: 'packets' },
+        { name: 'TX Direct',  color: '#00b4d8', stack: 'packets' },
+        { name: 'TX Flood',   color: '#80d8ee', stack: 'packets' },
+    ];
+
     function init(el, theme) {
         chart = echarts.init(el, theme);
         chart.setOption({
             tooltip: { trigger: 'axis' },
             legend: {
-                data: ['TX', 'RX'],
+                data: SERIES.map(function (s) { return s.name; }),
                 textStyle: { fontSize: 11 },
                 top: 0,
             },
@@ -16,22 +23,15 @@ var PacketsChart = (function () {
                 { type: 'inside', xAxisIndex: 0 },
                 { type: 'slider', xAxisIndex: 0, height: 20, bottom: 5 },
             ],
-            series: [
-                {
-                    name: 'TX',
+            series: SERIES.map(function (s) {
+                return {
+                    name: s.name,
                     type: 'bar',
-                    stack: 'packets',
-                    itemStyle: { color: '#00b4d8' },
+                    stack: s.stack,
+                    itemStyle: { color: s.color },
                     data: [],
-                },
-                {
-                    name: 'RX',
-                    type: 'bar',
-                    stack: 'packets',
-                    itemStyle: { color: '#06d6a0' },
-                    data: [],
-                },
-            ],
+                };
+            }),
             grid: { left: 50, right: 16, top: 30, bottom: 50 },
         });
         return chart;
@@ -39,14 +39,16 @@ var PacketsChart = (function () {
 
     function update(data) {
         if (!chart) return;
-        var tx = [], rx = [];
+        var keys = ['rx_direct', 'rx_flood', 'tx_direct', 'tx_flood'];
+        var seriesData = keys.map(function () { return []; });
         for (var i = 0; i < data.timestamps.length; i++) {
             var t = data.timestamps[i] * 1000;
-            tx.push([t, data.tx_count[i]]);
-            rx.push([t, data.rx_count[i]]);
+            for (var k = 0; k < keys.length; k++) {
+                seriesData[k].push([t, data[keys[k]][i]]);
+            }
         }
         chart.setOption({
-            series: [{ data: tx }, { data: rx }],
+            series: seriesData.map(function (d) { return { data: d }; }),
         });
     }
 

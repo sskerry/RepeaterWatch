@@ -188,8 +188,10 @@ def query_packets_activity(hours: int = 24, bucket_minutes: int = 15) -> list[di
     since = _since(hours)
     rows = _conn().execute(
         "SELECT (ts / ?) * ? AS bucket, "
-        "SUM(CASE WHEN direction='TX' THEN 1 ELSE 0 END) AS tx_count, "
-        "SUM(CASE WHEN direction='RX' THEN 1 ELSE 0 END) AS rx_count, "
+        "SUM(CASE WHEN direction='TX' AND route IN ('D','TD') THEN 1 ELSE 0 END) AS tx_direct, "
+        "SUM(CASE WHEN direction='TX' AND route IN ('F','TF') THEN 1 ELSE 0 END) AS tx_flood, "
+        "SUM(CASE WHEN direction='RX' AND route IN ('D','TD') THEN 1 ELSE 0 END) AS rx_direct, "
+        "SUM(CASE WHEN direction='RX' AND route IN ('F','TF') THEN 1 ELSE 0 END) AS rx_flood, "
         "COUNT(*) AS total "
         "FROM packet_log WHERE ts >= ? "
         "GROUP BY bucket ORDER BY bucket",
