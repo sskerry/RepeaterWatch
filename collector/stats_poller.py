@@ -163,9 +163,10 @@ class StatsPoller:
         )
 
         # Decode adverts (type=4) for neighbor tracking
+        # Only Repeaters (2) and Room Servers (3) count as neighbors
         if parsed["type"] == 4 and raw_hex:
             advert = decode_advert(raw_hex)
-            if advert:
+            if advert and advert["device_role"] in (2, 3):
                 # Only track direct (0-hop) RX adverts as neighbors
                 if parsed["direction"] == "RX" and parsed["route"] == "D":
                     models.upsert_neighbor(
