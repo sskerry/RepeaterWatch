@@ -13,4 +13,10 @@ FLASK_HOST = os.environ.get("MESHCORE_HOST", "0.0.0.0")
 FLASK_PORT = int(os.environ.get("MESHCORE_PORT", "5000"))
 FLASK_DEBUG = os.environ.get("MESHCORE_DEBUG", "0") == "1"
 
+FLASH_SERIAL_PORT = os.environ.get(
+    "MESHCORE_FLASH_SERIAL_PORT",
+    "/dev/serial/by-id/usb-Seeed_Studio_XIAO_nRF52840_C8A73AB0B3AB137D-if00",
+)
+FIRMWARE_UPLOAD_DIR = os.environ.get("MESHCORE_FIRMWARE_UPLOAD_DIR", "/tmp/meshcore-fw")
+
 MAX_QUERY_HOURS = 720  # 30 days

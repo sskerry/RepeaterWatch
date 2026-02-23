@@ -251,6 +251,99 @@
         });
     }
 
+    // ── Firmware Flash ────────────────────────────────────
+
+    var fwPollTimer = null;
+
+    function setupFirmwareFlash() {
+        var fileInput = document.getElementById('fw-file');
+        var fileLabel = document.getElementById('fw-file-name');
+        var hashInput = document.getElementById('fw-sha256');
+        var flashBtn = document.getElementById('fw-flash-btn');
+
+        fileInput.addEventListener('change', function () {
+            if (fileInput.files.length > 0) {
+                fileLabel.textContent = fileInput.files[0].name;
+            } else {
+                fileLabel.textContent = 'Choose firmware .zip';
+            }
+            updateFlashBtn();
+        });
+
+        hashInput.addEventListener('input', updateFlashBtn);
+
+        function updateFlashBtn() {
+            var hasFile = fileInput.files.length > 0;
+            var hasHash = hashInput.value.trim().length === 64;
+            flashBtn.disabled = !(hasFile && hasHash);
+        }
+
+        flashBtn.addEventListener('click', function () {
+            if (!confirm('Are you sure you want to flash firmware? This will temporarily stop all services.')) {
+                return;
+            }
+            var formData = new FormData();
+            formData.append('firmware', fileInput.files[0]);
+            formData.append('sha256', hashInput.value.trim());
+
+            flashBtn.disabled = true;
+            showFwStatus('flashing', 'Uploading firmware...');
+            showFwLog('');
+
+            fetch('/api/v1/firmware/flash', { method: 'POST', body: formData })
+                .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, data: d }; }); })
+                .then(function (resp) {
+                    if (!resp.ok) {
+                        showFwStatus('error', resp.data.error || 'Upload failed');
+                        flashBtn.disabled = false;
+                        return;
+                    }
+                    startFwPolling();
+                })
+                .catch(function (err) {
+                    showFwStatus('error', 'Network error: ' + err.message);
+                    flashBtn.disabled = false;
+                });
+        });
+    }
+
+    function startFwPolling() {
+        if (fwPollTimer) clearInterval(fwPollTimer);
+        fwPollTimer = setInterval(pollFwStatus, 2000);
+        pollFwStatus();
+    }
+
+    function pollFwStatus() {
+        fetchJSON('/api/v1/firmware/status').then(function (d) {
+            showFwStatus(d.state, d.progress);
+            if (d.log && d.log.length > 0) {
+                showFwLog(d.log.join('\n'));
+            }
+            if (d.state === 'done' || d.state === 'error' || d.state === 'idle') {
+                if (fwPollTimer) {
+                    clearInterval(fwPollTimer);
+                    fwPollTimer = null;
+                }
+                document.getElementById('fw-flash-btn').disabled = false;
+            }
+        }).catch(noop);
+    }
+
+    function showFwStatus(state, text) {
+        var el = document.getElementById('fw-status');
+        var span = document.getElementById('fw-status-text');
+        el.style.display = text ? 'block' : 'none';
+        el.className = 'fw-status state-' + state;
+        span.textContent = text;
+    }
+
+    function showFwLog(text) {
+        var el = document.getElementById('fw-log');
+        el.style.display = text ? 'block' : 'none';
+        el.textContent = text;
+        el.scrollTop = el.scrollHeight;
+    }
+
     // ── Resize ───────────────────────────────────────────
 
     var resizeTimeout;
@@ -273,6 +366,7 @@
     setupTimeButtons();
     setupThemeToggle();
     setupMapFullscreen();
+    setupFirmwareFlash();
 
     refreshTimer = setInterval(refreshAll, REFRESH_INTERVAL);
 })();

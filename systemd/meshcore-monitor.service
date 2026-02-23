@@ -11,6 +11,7 @@ Restart=always
 RestartSec=10
 Environment=MESHCORE_SERIAL_PORT=/dev/ttyV0
 Environment=MESHCORE_DB_PATH=/opt/meshcore-monitor/meshcore.db
+Environment=MESHCORE_FLASH_SERIAL_PORT=/dev/serial/by-id/usb-Seeed_Studio_XIAO_nRF52840_C8A73AB0B3AB137D-if00
 
 [Install]
 WantedBy=multi-user.target

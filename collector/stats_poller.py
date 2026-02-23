@@ -36,6 +36,7 @@ class StatsPoller:
         }
 
     def start(self):
+        self._stop_event.clear()
         self.reader.set_packet_callback(self._on_packet)
         self._thread = threading.Thread(target=self._run, daemon=True, name="stats-poller")
         self._thread.start()

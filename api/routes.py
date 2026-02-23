@@ -1,6 +1,11 @@
-from flask import Blueprint, jsonify, request
+import os
 
+from flask import Blueprint, jsonify, request, current_app
+from werkzeug.utils import secure_filename
+
+import config
 from database import models
+from collector import firmware_flasher
 
 api = Blueprint("api", __name__, url_prefix="/api/v1")
 
@@ -168,11 +173,51 @@ def neighbors_history():
 
 @api.route("/status")
 def status():
-    from collector.stats_poller import StatsPoller
-    from flask import current_app
     poller = current_app.config.get("poller")
     poller_status = poller.status if poller else {"running": False}
     return jsonify({
         **poller_status,
         "db_size_bytes": models.db_size_bytes(),
     })
+
+
+@api.route("/firmware/flash", methods=["POST"])
+def firmware_flash():
+    # Check if a flash is already in progress
+    current = firmware_flasher.get_status()
+    if current["state"] == "flashing":
+        return jsonify({"error": "Flash already in progress"}), 409
+
+    if "firmware" not in request.files:
+        return jsonify({"error": "No firmware file provided"}), 400
+
+    expected_hash = request.form.get("sha256", "").strip()
+    if not expected_hash or len(expected_hash) != 64:
+        return jsonify({"error": "Invalid SHA256 hash (expected 64 hex chars)"}), 400
+
+    fw_file = request.files["firmware"]
+    if not fw_file.filename or not fw_file.filename.endswith(".zip"):
+        return jsonify({"error": "Firmware file must be a .zip"}), 400
+
+    # Save uploaded file
+    upload_dir = config.FIRMWARE_UPLOAD_DIR
+    os.makedirs(upload_dir, exist_ok=True)
+    filename = secure_filename(fw_file.filename)
+    fw_path = os.path.join(upload_dir, filename)
+    fw_file.save(fw_path)
+
+    # Verify hash before starting flash
+    if not firmware_flasher.verify_sha256(fw_path, expected_hash):
+        os.remove(fw_path)
+        return jsonify({"error": "SHA256 hash mismatch"}), 400
+
+    # Kick off flash in background thread
+    poller = current_app.config.get("poller")
+    firmware_flasher.flash_firmware(fw_path, expected_hash, poller)
+
+    return jsonify({"status": "started"})
+
+
+@api.route("/firmware/status")
+def firmware_status():
+    return jsonify(firmware_flasher.get_status())
