@@ -6,6 +6,8 @@ var PacketsChart = (function () {
         { name: 'RX Flood',   color: '#90e0c0', stack: 'packets' },
         { name: 'TX Direct',  color: '#00b4d8', stack: 'packets' },
         { name: 'TX Flood',   color: '#80d8ee', stack: 'packets' },
+        { name: 'Dropped',    color: '#ef476f', stack: 'packets' },
+        { name: 'Duplicates', color: '#ffd166', stack: 'packets' },
     ];
 
     function init(el, theme) {
@@ -44,7 +46,7 @@ var PacketsChart = (function () {
 
     function update(data) {
         if (!chart) return;
-        var keys = ['rx_direct', 'rx_flood', 'tx_direct', 'tx_flood'];
+        var keys = ['rx_direct', 'rx_flood', 'tx_direct', 'tx_flood', 'dropped', 'duplicates'];
         var seriesData = keys.map(function () { return []; });
         for (var i = 0; i < data.timestamps.length; i++) {
             var t = data.timestamps[i] * 1000;

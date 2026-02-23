@@ -103,14 +103,40 @@ def stats_airtime():
 
 @api.route("/packets/activity")
 def packets_activity():
+    h = _hours()
     bucket = request.args.get("bucket_minutes", 15, type=int)
-    rows = models.query_packets_activity(_hours(), bucket)
+    rows = models.query_packets_activity(h, bucket)
+    errors = models.query_packet_errors(h)
+    # Build lookup of dropped/dups by timestamp
+    err_by_ts = {}
+    for e in errors:
+        err_by_ts[e["ts"]] = e
+    # Merge: for each activity bucket find nearest error reading
+    err_timestamps = sorted(err_by_ts.keys())
+    def find_errors(bucket_ts):
+        dropped = 0
+        dups = 0
+        for ets in err_timestamps:
+            if ets <= bucket_ts:
+                dropped = err_by_ts[ets]["dropped"]
+                dups = err_by_ts[ets]["duplicates"]
+            else:
+                break
+        return dropped, dups
+    dropped_list = []
+    dups_list = []
+    for r in rows:
+        d, u = find_errors(r["bucket"])
+        dropped_list.append(d)
+        dups_list.append(u)
     return jsonify({
         "timestamps": [r["bucket"] for r in rows],
         "tx_direct": [r["tx_direct"] for r in rows],
         "tx_flood": [r["tx_flood"] for r in rows],
         "rx_direct": [r["rx_direct"] for r in rows],
         "rx_flood": [r["rx_flood"] for r in rows],
+        "dropped": dropped_list,
+        "duplicates": dups_list,
         "total": [r["total"] for r in rows],
     })
 

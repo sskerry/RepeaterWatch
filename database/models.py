@@ -163,6 +163,24 @@ def query_stats_packets(hours: int = 24) -> list[dict]:
     return [dict(r) for r in rows]
 
 
+def query_packet_errors(hours: int = 24) -> list[dict]:
+    rows = _conn().execute(
+        "SELECT ts, recv_errors, direct_dups "
+        "FROM stats_packets WHERE ts >= ? ORDER BY ts",
+        (_since(hours),),
+    ).fetchall()
+    result = []
+    prev = None
+    for r in rows:
+        row = dict(r)
+        if prev is not None:
+            errs = max(0, (row["recv_errors"] or 0) - (prev["recv_errors"] or 0))
+            dups = max(0, (row["direct_dups"] or 0) - (prev["direct_dups"] or 0))
+            result.append({"ts": row["ts"], "dropped": errs, "duplicates": dups})
+        prev = row
+    return result
+
+
 def query_stats_extpower(hours: int = 24) -> list[dict]:
     rows = _conn().execute(
         "SELECT ts, ch0_voltage, ch0_current, ch0_power, "
