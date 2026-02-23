@@ -44,7 +44,7 @@
     function refreshAll() {
         var h = currentHours;
 
-        fetchJSON('/api/v1/device').then(function (d) {
+        var deviceReady = fetchJSON('/api/v1/device').then(function (d) {
             document.getElementById('device-name').textContent = d.name || 'MeshCore Repeater';
             document.getElementById('firmware-badge').textContent = d.firmware || '--';
             document.getElementById('board-badge').textContent = d.board || '--';
@@ -68,10 +68,14 @@
             PacketsChart.update(d);
         }).catch(noop);
 
-        fetchJSON('/api/v1/neighbors').then(function (d) {
-            NeighborMap.update(d);
+        var neighborsReady = fetchJSON('/api/v1/neighbors').then(function (d) {
             renderNeighborsTable(d);
-        }).catch(noop);
+            return d;
+        }).catch(function () { return []; });
+
+        Promise.all([deviceReady, neighborsReady]).then(function (results) {
+            NeighborMap.update(results[1]);
+        });
 
         fetchJSON('/api/v1/packets/recent?limit=50').then(function (d) {
             renderPacketsTable(d);
