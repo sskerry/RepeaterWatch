@@ -114,27 +114,32 @@ def packets_activity():
     def find_dups(bucket_ts):
         dd = 0
         fd = 0
+        re = 0
         for dts in dup_timestamps:
             if dts <= bucket_ts:
-                dd = dup_by_ts[dts]["direct_dups"]
-                fd = dup_by_ts[dts]["flood_dups"]
+                dd = dup_by_ts[dts]["dups_direct"]
+                fd = dup_by_ts[dts]["dups_flood"]
+                re = dup_by_ts[dts]["rx_errors"]
             else:
                 break
-        return dd, fd
-    direct_dups_list = []
-    flood_dups_list = []
+        return dd, fd, re
+    dups_direct_list = []
+    dups_flood_list = []
+    rx_errors_list = []
     for r in rows:
-        dd, fd = find_dups(r["bucket"])
-        direct_dups_list.append(dd)
-        flood_dups_list.append(fd)
+        dd, fd, re = find_dups(r["bucket"])
+        dups_direct_list.append(dd)
+        dups_flood_list.append(fd)
+        rx_errors_list.append(re)
     return jsonify({
         "timestamps": [r["bucket"] for r in rows],
         "tx_direct": [r["tx_direct"] for r in rows],
         "tx_flood": [r["tx_flood"] for r in rows],
         "rx_direct": [r["rx_direct"] for r in rows],
         "rx_flood": [r["rx_flood"] for r in rows],
-        "direct_dups": direct_dups_list,
-        "flood_dups": flood_dups_list,
+        "dups_direct": dups_direct_list,
+        "dups_flood": dups_flood_list,
+        "rx_errors": rx_errors_list,
         "total": [r["total"] for r in rows],
     })
 

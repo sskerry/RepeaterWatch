@@ -165,7 +165,7 @@ def query_stats_packets(hours: int = 24) -> list[dict]:
 
 def query_packet_dups(hours: int = 24) -> list[dict]:
     rows = _conn().execute(
-        "SELECT ts, direct_dups, flood_dups "
+        "SELECT ts, direct_dups, flood_dups, recv_errors "
         "FROM stats_packets WHERE ts >= ? ORDER BY ts",
         (_since(hours),),
     ).fetchall()
@@ -176,7 +176,8 @@ def query_packet_dups(hours: int = 24) -> list[dict]:
         if prev is not None:
             dd = max(0, (row["direct_dups"] or 0) - (prev["direct_dups"] or 0))
             fd = max(0, (row["flood_dups"] or 0) - (prev["flood_dups"] or 0))
-            result.append({"ts": row["ts"], "direct_dups": dd, "flood_dups": fd})
+            re = max(0, (row["recv_errors"] or 0) - (prev["recv_errors"] or 0))
+            result.append({"ts": row["ts"], "dups_direct": dd, "dups_flood": fd, "rx_errors": re})
         prev = row
     return result
 
