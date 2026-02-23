@@ -55,12 +55,12 @@ var PowerCharts = (function () {
 
         for (var i = 0; i < data.timestamps.length; i++) {
             var t = data.timestamps[i] * 1000;
-            voltageSeries[0].push([t, data.ch1_voltage[i]]);
-            voltageSeries[1].push([t, data.ch2_voltage[i]]);
-            currentSeries[0].push([t, data.ch1_current[i]]);
-            currentSeries[1].push([t, data.ch2_current[i]]);
-            powerSeries[0].push([t, data.ch1_power[i]]);
-            powerSeries[1].push([t, data.ch2_power[i]]);
+            voltageSeries[0].push([t, data.ch2_voltage[i]]);
+            voltageSeries[1].push([t, data.ch1_voltage[i]]);
+            currentSeries[0].push([t, data.ch2_current[i]]);
+            currentSeries[1].push([t, data.ch1_current[i]]);
+            powerSeries[0].push([t, data.ch2_power[i]]);
+            powerSeries[1].push([t, data.ch1_power[i]]);
         }
 
         voltageChart.setOption({
