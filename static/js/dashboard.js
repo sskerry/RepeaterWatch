@@ -152,13 +152,24 @@
     };
     var ROUTE_NAMES = {'D': 'Direct', 'F': 'Flood', 'TD': 'T.Direct', 'TF': 'T.Flood'};
 
+    function copyText(text) {
+        var ta = document.createElement('textarea');
+        ta.value = text;
+        ta.style.position = 'fixed';
+        ta.style.opacity = '0';
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        document.body.removeChild(ta);
+    }
+
     function renderPacketsTable(packets) {
         var tbody = document.getElementById('packets-tbody');
         tbody.innerHTML = '';
         packets.forEach(function (p) {
             var tr = document.createElement('tr');
             var raw = p.raw_hex || p.hash || '--';
-            var truncated = raw.length > 16 ? raw.substring(0, 16) + '...' : raw;
+            var truncated = raw.length > 16 ? raw.substring(0, 16) + '\u2026' : raw;
             tr.innerHTML =
                 '<td>' + formatTime(p.ts) + '</td>' +
                 '<td class="dir-' + (p.direction || '').toLowerCase() + '">' + (p.direction || '--') + '</td>' +
@@ -167,15 +178,15 @@
                 '<td>' + (p.snr != null ? p.snr.toFixed(1) : '--') + '</td>' +
                 '<td>' + (p.rssi != null ? p.rssi.toFixed(0) : '--') + '</td>' +
                 '<td>' + (p.score != null ? p.score.toFixed(2) : '--') + '</td>' +
-                '<td class="pkt-hex" title="Click to copy">' + truncated + '</td>';
+                '<td class="pkt-hex" title="Click to copy full packet">' + truncated + '</td>';
             if (raw !== '--') {
-                tr.querySelector('.pkt-hex').addEventListener('click', function () {
-                    navigator.clipboard.writeText(raw).then(function () {
-                        var cell = tr.querySelector('.pkt-hex');
-                        cell.textContent = 'Copied!';
-                        setTimeout(function () { cell.textContent = truncated; }, 1000);
+                (function (hexCell, fullHex, shortHex) {
+                    hexCell.addEventListener('click', function () {
+                        copyText(fullHex);
+                        hexCell.textContent = 'Copied!';
+                        setTimeout(function () { hexCell.textContent = shortHex; }, 1000);
                     });
-                });
+                })(tr.querySelector('.pkt-hex'), raw, truncated);
             }
             tbody.appendChild(tr);
         });
