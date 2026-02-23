@@ -68,12 +68,12 @@ def insert_stats_radio(ts: int, noise_floor, tx_air_secs, rx_air_secs):
 
 
 def insert_stats_packets(ts: int, recv_total, sent_total, recv_errors,
-                         fwd_total, fwd_errors, direct_dups):
+                         fwd_total, fwd_errors, direct_dups, flood_dups=None):
     _conn().execute(
         "INSERT OR REPLACE INTO stats_packets "
-        "(ts, recv_total, sent_total, recv_errors, fwd_total, fwd_errors, direct_dups) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?)",
-        (ts, recv_total, sent_total, recv_errors, fwd_total, fwd_errors, direct_dups),
+        "(ts, recv_total, sent_total, recv_errors, fwd_total, fwd_errors, direct_dups, flood_dups) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        (ts, recv_total, sent_total, recv_errors, fwd_total, fwd_errors, direct_dups, flood_dups),
     )
     _conn().commit()
 
@@ -163,9 +163,9 @@ def query_stats_packets(hours: int = 24) -> list[dict]:
     return [dict(r) for r in rows]
 
 
-def query_packet_errors(hours: int = 24) -> list[dict]:
+def query_packet_dups(hours: int = 24) -> list[dict]:
     rows = _conn().execute(
-        "SELECT ts, recv_errors, direct_dups "
+        "SELECT ts, direct_dups, flood_dups "
         "FROM stats_packets WHERE ts >= ? ORDER BY ts",
         (_since(hours),),
     ).fetchall()
@@ -174,9 +174,9 @@ def query_packet_errors(hours: int = 24) -> list[dict]:
     for r in rows:
         row = dict(r)
         if prev is not None:
-            errs = max(0, (row["recv_errors"] or 0) - (prev["recv_errors"] or 0))
-            dups = max(0, (row["direct_dups"] or 0) - (prev["direct_dups"] or 0))
-            result.append({"ts": row["ts"], "dropped": errs, "duplicates": dups})
+            dd = max(0, (row["direct_dups"] or 0) - (prev["direct_dups"] or 0))
+            fd = max(0, (row["flood_dups"] or 0) - (prev["flood_dups"] or 0))
+            result.append({"ts": row["ts"], "direct_dups": dd, "flood_dups": fd})
         prev = row
     return result
 

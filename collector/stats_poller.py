@@ -128,6 +128,7 @@ class StatsPoller:
                 fwd_total=data.get("fwd_total"),
                 fwd_errors=data.get("fwd_errors"),
                 direct_dups=data.get("direct_dups"),
+                flood_dups=data.get("flood_dups"),
             )
 
         # stats-extpower
