@@ -40,46 +40,59 @@ body {
 header {
     background: var(--bg-header);
     color: #fff;
-    padding: 12px 20px;
+    padding: 10px 20px;
     display: flex;
     justify-content: space-between;
     align-items: center;
     flex-wrap: wrap;
-    gap: 8px;
+    gap: 10px;
 }
 
-.header-left {
+.header-info {
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: 10px;
     flex-wrap: wrap;
 }
 
-.header-left h1 {
-    font-size: 1.3rem;
+.header-info h1 {
+    font-size: 1.2rem;
     font-weight: 600;
+    letter-spacing: -0.01em;
 }
 
-.header-right {
+.header-sep {
+    width: 1px;
+    height: 18px;
+    background: rgba(255,255,255,0.2);
+}
+
+.header-actions {
     display: flex;
     align-items: center;
-    gap: 12px;
-    font-size: 0.9rem;
+    gap: 8px;
 }
 
 .badge {
-    background: rgba(255,255,255,0.15);
+    background: rgba(255,255,255,0.12);
     padding: 3px 10px;
     border-radius: 12px;
-    font-size: 0.8rem;
+    font-size: 0.75rem;
+    font-weight: 500;
+    letter-spacing: 0.02em;
+}
+
+.badge-uptime {
+    font-variant-numeric: tabular-nums;
 }
 
 .status-dot {
-    width: 12px;
-    height: 12px;
+    width: 10px;
+    height: 10px;
     border-radius: 50%;
     background: var(--red);
     display: inline-block;
+    flex-shrink: 0;
 }
 
 .status-dot.connected {

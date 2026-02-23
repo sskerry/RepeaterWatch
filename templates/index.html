@@ -10,16 +10,17 @@
 <body>
     <!-- Header -->
     <header id="header">
-        <div class="header-left">
+        <div class="header-info">
+            <span class="status-dot" id="status-dot" title="Collector status"></span>
             <h1 id="device-name">MeshCore Repeater</h1>
+            <span class="header-sep"></span>
             <span class="badge" id="firmware-badge">--</span>
             <span class="badge" id="board-badge">--</span>
+            <span class="badge badge-uptime" id="uptime-display">--</span>
         </div>
-        <div class="header-right">
-            <span id="uptime-display">Uptime: --</span>
-            <span class="status-dot" id="status-dot" title="Collector status"></span>
-            <button id="reboot-radio-btn" class="header-btn reboot-btn" title="Reboot Radio (coming soon)" disabled>Reboot Radio</button>
+        <div class="header-actions">
             <button id="flash-firmware-btn" class="header-btn flash-btn" title="Flash Firmware">Flash Firmware</button>
+            <button id="reboot-radio-btn" class="header-btn reboot-btn" title="Reboot Radio (coming soon)" disabled>Reboot Radio</button>
         </div>
     </header>
 

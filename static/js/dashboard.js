@@ -48,7 +48,7 @@
             document.getElementById('device-name').textContent = d.name || 'MeshCore Repeater';
             document.getElementById('firmware-badge').textContent = d.firmware || '--';
             document.getElementById('board-badge').textContent = d.board || '--';
-            document.getElementById('uptime-display').textContent = 'Uptime: ' + formatUptime(d.uptime_secs);
+            document.getElementById('uptime-display').textContent = formatUptime(d.uptime_secs);
             NeighborMap.setRepeaterInfo(d);
         }).catch(noop);
 
