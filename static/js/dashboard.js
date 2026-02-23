@@ -35,7 +35,6 @@
         );
         AirtimeChart.init(document.getElementById('chart-airtime'), theme);
         PacketsChart.init(document.getElementById('chart-packets'), theme);
-        NeighborChart.init(document.getElementById('chart-neighbors'), theme);
         NeighborMap.init(document.getElementById('neighbor-map'));
     }
 
@@ -75,12 +74,9 @@
             PacketsChart.update(d);
         }).catch(noop);
 
-        fetchJSON('/api/v1/neighbors/history?hours=' + h).then(function (d) {
-            NeighborChart.update(d);
-        }).catch(noop);
-
         fetchJSON('/api/v1/neighbors').then(function (d) {
             NeighborMap.update(d);
+            renderNeighborsTable(d);
         }).catch(noop);
 
         fetchJSON('/api/v1/packets/recent?limit=50').then(function (d) {
@@ -108,10 +104,53 @@
         return 360;
     }
 
+    // ── Neighbors Table ─────────────────────────────────
+
+    function renderNeighborsTable(neighbors) {
+        var tbody = document.getElementById('neighbors-tbody');
+        tbody.innerHTML = '';
+        neighbors.forEach(function (n) {
+            var tr = document.createElement('tr');
+            tr.innerHTML =
+                '<td>' + (n.name || n.pubkey_prefix || '--') + '</td>' +
+                '<td>' + (n.device_role || '--') + '</td>' +
+                '<td>' + fmtSnr(n.last_snr) + '</td>' +
+                '<td>' + fmtRssi(n.last_rssi) + '</td>' +
+                '<td>' + fmtSnr(n.avg_snr) + '</td>' +
+                '<td>' + fmtRssi(n.avg_rssi) + '</td>' +
+                '<td>' + timeSince(n.last_seen) + '</td>';
+            tbody.appendChild(tr);
+        });
+    }
+
+    function fmtSnr(v) {
+        if (v == null) return '--';
+        var cls = v > 5 ? 'snr-good' : v >= -1 ? 'snr-ok' : 'snr-bad';
+        return '<span class="' + cls + '">' + v.toFixed(1) + '</span>';
+    }
+
+    function fmtRssi(v) {
+        return v != null ? v.toFixed(0) + ' dBm' : '--';
+    }
+
+    function timeSince(epochSecs) {
+        if (!epochSecs) return '--';
+        var diff = Math.floor(Date.now() / 1000) - epochSecs;
+        if (diff < 60) return diff + 's ago';
+        if (diff < 3600) return Math.floor(diff / 60) + 'm ago';
+        if (diff < 86400) return Math.floor(diff / 3600) + 'h ago';
+        return Math.floor(diff / 86400) + 'd ago';
+    }
+
     // ── Packets Table ────────────────────────────────────
 
-    var PKT_TYPES = {1: 'Advert', 4: 'Advert', 5: 'GrpTxt', 9: 'Trace', 11: 'Control'};
-    var ROUTE_NAMES = {'D': 'Direct', 'F': 'Flood', 'TD': 'TxDirect', 'TF': 'TxFlood'};
+    var PKT_TYPES = {
+        0: 'Request', 1: 'Response', 2: 'TxtMsg', 3: 'Ack',
+        4: 'Advert', 5: 'GrpTxt', 6: 'GrpData', 7: 'AnonReq',
+        8: 'Path', 9: 'Trace', 10: 'Multipart', 11: 'Control',
+        15: 'RawCustom'
+    };
+    var ROUTE_NAMES = {'D': 'Direct', 'F': 'Flood', 'TD': 'T.Direct', 'TF': 'T.Flood'};
 
     function renderPacketsTable(packets) {
         var tbody = document.getElementById('packets-tbody');
@@ -175,7 +214,6 @@
         document.getElementById('theme-toggle').addEventListener('click', function () {
             var next = getTheme() === 'dark' ? 'light' : 'dark';
             applyTheme(next);
-            // Re-initialize charts with new theme
             initCharts();
             refreshAll();
         });
@@ -191,7 +229,6 @@
             PowerCharts.resize();
             AirtimeChart.resize();
             PacketsChart.resize();
-            NeighborChart.resize();
             NeighborMap.invalidateSize();
         }, 200);
     });

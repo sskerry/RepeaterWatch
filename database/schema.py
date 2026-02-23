@@ -62,6 +62,7 @@ CREATE TABLE IF NOT EXISTS neighbors (
     device_role   TEXT,
     last_seen     INTEGER,
     last_snr      REAL,
+    last_rssi     REAL,
     lat           REAL,
     lon           REAL
 );
@@ -69,6 +70,8 @@ CREATE TABLE IF NOT EXISTS neighbors (
 CREATE TABLE IF NOT EXISTS neighbor_sightings (
     ts            INTEGER NOT NULL,
     pubkey_prefix TEXT NOT NULL,
+    snr           REAL,
+    rssi          REAL,
     PRIMARY KEY (ts, pubkey_prefix)
 );
 
@@ -81,6 +84,9 @@ MIGRATIONS = [
     "ALTER TABLE packet_log ADD COLUMN pkt_type INTEGER",
     "ALTER TABLE packet_log ADD COLUMN route TEXT",
     "ALTER TABLE neighbors ADD COLUMN device_role TEXT",
+    "ALTER TABLE neighbors ADD COLUMN last_rssi REAL",
+    "ALTER TABLE neighbor_sightings ADD COLUMN snr REAL",
+    "ALTER TABLE neighbor_sightings ADD COLUMN rssi REAL",
 ]
 
 

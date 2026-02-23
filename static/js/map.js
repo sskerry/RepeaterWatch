@@ -27,7 +27,7 @@ var NeighborMap = (function () {
 
     function makeDisc(latlng, label, color, popupHtml) {
         var marker = L.circleMarker(latlng, {
-            radius: 18,
+            radius: 10,
             fillColor: color,
             fillOpacity: 0.85,
             color: '#fff',

@@ -175,12 +175,15 @@ class StatsPoller:
                         device_role=advert["device_role_name"],
                         last_seen=ts,
                         last_snr=parsed["snr"],
+                        last_rssi=parsed["rssi"],
                         lat=advert["lat"],
                         lon=advert["lon"],
                     )
                     models.insert_neighbor_sighting(
                         models.aligned_ts(ts),
                         advert["pubkey_prefix"],
+                        snr=parsed["snr"],
+                        rssi=parsed["rssi"],
                     )
                     logger.info(
                         "Neighbor: %s (%s) SNR=%s lat=%s lon=%s",

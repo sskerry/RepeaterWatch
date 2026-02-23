@@ -57,16 +57,33 @@
             <h3>Packets TX / RX</h3>
             <div id="chart-packets" class="chart-container"></div>
         </div>
-        <div class="chart-card">
-            <h3>Neighbor Count</h3>
-            <div id="chart-neighbors" class="chart-container"></div>
-        </div>
     </div>
 
-    <!-- Neighbor Map -->
-    <div class="full-width-card">
-        <h3>Neighbor Map</h3>
-        <div id="neighbor-map"></div>
+    <!-- Neighbor Map + Details -->
+    <div class="neighbor-section">
+        <div class="full-width-card neighbor-map-card">
+            <h3>Neighbor Map</h3>
+            <div id="neighbor-map"></div>
+        </div>
+        <div class="full-width-card neighbor-list-card">
+            <h3>Neighbors</h3>
+            <div class="table-scroll">
+                <table id="neighbors-table">
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Role</th>
+                            <th>Last SNR</th>
+                            <th>Last RSSI</th>
+                            <th>Avg SNR</th>
+                            <th>Avg RSSI</th>
+                            <th>Last Seen</th>
+                        </tr>
+                    </thead>
+                    <tbody id="neighbors-tbody"></tbody>
+                </table>
+            </div>
+        </div>
     </div>
 
     <!-- Recent Packets Table -->
@@ -109,7 +126,6 @@
     <script src="/static/js/charts/radio.js"></script>
     <script src="/static/js/charts/power.js"></script>
     <script src="/static/js/charts/packets.js"></script>
-    <script src="/static/js/charts/neighbors.js"></script>
     <script src="/static/js/map.js"></script>
     <script src="/static/js/dashboard.js"></script>
 </body>

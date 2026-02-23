@@ -168,10 +168,28 @@ header {
     margin-bottom: 8px;
 }
 
+.neighbor-section {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    padding: 0 20px 16px;
+}
+
+.neighbor-section .full-width-card {
+    margin: 0;
+}
+
 #neighbor-map {
     height: 350px;
     border-radius: 6px;
     z-index: 1;
+}
+
+@media (max-width: 900px) {
+    .neighbor-section {
+        grid-template-columns: 1fr;
+        padding: 0 12px 12px;
+    }
 }
 
 .map-node-label {
@@ -222,6 +240,10 @@ tr:hover td {
 
 td.dir-tx { color: var(--accent); }
 td.dir-rx { color: var(--green); }
+
+.snr-good { color: var(--green); font-weight: 600; }
+.snr-ok   { color: var(--yellow); font-weight: 600; }
+.snr-bad  { color: var(--red); font-weight: 600; }
 
 /* Footer */
 footer {

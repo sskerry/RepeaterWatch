@@ -104,21 +104,23 @@ def insert_packet(ts: int, direction, pkt_type, route, snr, rssi, score, hash_):
 
 
 def upsert_neighbor(pubkey_prefix: str, name: str | None, device_role: str | None,
-                    last_seen: int, last_snr: float | None,
+                    last_seen: int, last_snr: float | None, last_rssi: float | None,
                     lat: float | None, lon: float | None):
     _conn().execute(
         "INSERT OR REPLACE INTO neighbors "
-        "(pubkey_prefix, name, device_role, last_seen, last_snr, lat, lon) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?)",
-        (pubkey_prefix, name, device_role, last_seen, last_snr, lat, lon),
+        "(pubkey_prefix, name, device_role, last_seen, last_snr, last_rssi, lat, lon) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        (pubkey_prefix, name, device_role, last_seen, last_snr, last_rssi, lat, lon),
     )
     _conn().commit()
 
 
-def insert_neighbor_sighting(ts: int, pubkey_prefix: str):
+def insert_neighbor_sighting(ts: int, pubkey_prefix: str,
+                             snr: float | None = None, rssi: float | None = None):
     _conn().execute(
-        "INSERT OR IGNORE INTO neighbor_sightings (ts, pubkey_prefix) VALUES (?, ?)",
-        (ts, pubkey_prefix),
+        "INSERT OR REPLACE INTO neighbor_sightings (ts, pubkey_prefix, snr, rssi) "
+        "VALUES (?, ?, ?, ?)",
+        (ts, pubkey_prefix, snr, rssi),
     )
     _conn().commit()
 
@@ -197,10 +199,21 @@ def query_packets_activity(hours: int = 24, bucket_minutes: int = 15) -> list[di
 
 def query_neighbors() -> list[dict]:
     rows = _conn().execute(
-        "SELECT pubkey_prefix, name, device_role, last_seen, last_snr, lat, lon "
-        "FROM neighbors ORDER BY last_seen DESC"
+        "SELECT n.pubkey_prefix, n.name, n.device_role, n.last_seen, "
+        "n.last_snr, n.last_rssi, n.lat, n.lon, "
+        "AVG(s.snr) AS avg_snr, AVG(s.rssi) AS avg_rssi, COUNT(s.ts) AS sighting_count "
+        "FROM neighbors n "
+        "LEFT JOIN neighbor_sightings s ON n.pubkey_prefix = s.pubkey_prefix "
+        "GROUP BY n.pubkey_prefix "
+        "ORDER BY n.last_seen DESC"
     ).fetchall()
-    return [dict(r) for r in rows]
+    result = []
+    for r in rows:
+        d = dict(r)
+        d["avg_snr"] = round(d["avg_snr"], 1) if d["avg_snr"] is not None else None
+        d["avg_rssi"] = round(d["avg_rssi"], 1) if d["avg_rssi"] is not None else None
+        result.append(d)
+    return result
 
 
 def query_neighbor_history(hours: int = 24) -> list[dict]:
