@@ -109,6 +109,9 @@
 
     // ── Packets Table ────────────────────────────────────
 
+    var PKT_TYPES = {1: 'Advert', 4: 'Advert', 5: 'GrpTxt', 9: 'Trace', 11: 'Control'};
+    var ROUTE_NAMES = {'D': 'Direct', 'F': 'Flood', 'TD': 'TxDirect', 'TF': 'TxFlood'};
+
     function renderPacketsTable(packets) {
         var tbody = document.getElementById('packets-tbody');
         tbody.innerHTML = '';
@@ -117,11 +120,12 @@
             tr.innerHTML =
                 '<td>' + formatTime(p.ts) + '</td>' +
                 '<td class="dir-' + (p.direction || '').toLowerCase() + '">' + (p.direction || '--') + '</td>' +
+                '<td>' + (PKT_TYPES[p.pkt_type] || p.pkt_type || '--') + '</td>' +
+                '<td>' + (ROUTE_NAMES[p.route] || p.route || '--') + '</td>' +
                 '<td>' + (p.snr != null ? p.snr.toFixed(1) : '--') + '</td>' +
                 '<td>' + (p.rssi != null ? p.rssi.toFixed(0) : '--') + '</td>' +
                 '<td>' + (p.score != null ? p.score.toFixed(2) : '--') + '</td>' +
-                '<td>' + (p.hash || '--') + '</td>' +
-                '<td>' + (p.path || '--') + '</td>';
+                '<td>' + (p.hash || '--') + '</td>';
             tbody.appendChild(tr);
         });
     }

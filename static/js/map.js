@@ -28,6 +28,7 @@ var NeighborMap = (function () {
             var ago = timeSince(n.last_seen);
             marker.bindPopup(
                 '<strong>' + (n.name || n.pubkey_prefix) + '</strong><br>' +
+                (n.device_role ? 'Role: ' + n.device_role + '<br>' : '') +
                 'SNR: ' + (n.last_snr != null ? n.last_snr + ' dB' : '--') + '<br>' +
                 'Last seen: ' + ago
             );

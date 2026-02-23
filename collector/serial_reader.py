@@ -18,12 +18,14 @@ class SerialReader:
         self._lock = threading.Lock()
         self._connected = False
         self._packet_callback = None
+        self._last_raw_hex: str | None = None
 
     @property
     def connected(self) -> bool:
         return self._connected
 
     def set_packet_callback(self, cb):
+        """Callback signature: cb(info_line: str, raw_hex: str | None)"""
         self._packet_callback = cb
 
     def connect(self) -> bool:
@@ -91,14 +93,21 @@ class SerialReader:
             if capture:
                 lines.append(line)
             else:
-                if self._packet_callback and self._looks_like_packet(line):
-                    self._packet_callback(line)
+                self._dispatch_line(line)
 
         return "\n".join(lines)
 
-    @staticmethod
-    def _looks_like_packet(line: str) -> bool:
-        return ("SNR:" in line or "RSSI:" in line) and ("TX " in line or "RX " in line)
+    def _dispatch_line(self, line: str):
+        """Handle a non-response line: buffer RAW hex, dispatch info lines."""
+        if "U RAW:" in line:
+            from collector.packet_parser import extract_raw_hex
+            self._last_raw_hex = extract_raw_hex(line)
+            return
+
+        if "U:" in line and ("TX," in line or "RX," in line):
+            if self._packet_callback:
+                self._packet_callback(line, self._last_raw_hex)
+            self._last_raw_hex = None
 
     def send_command_json(self, command: str) -> dict | None:
         raw = self.send_command(command)
@@ -114,11 +123,11 @@ class SerialReader:
         if not self._port or not self._port.is_open:
             return
         try:
-            if self._port.in_waiting:
+            while self._port.in_waiting:
                 raw = self._port.readline()
                 if raw:
                     line = raw.decode("utf-8", errors="replace").strip()
-                    if line and self._packet_callback and self._looks_like_packet(line):
-                        self._packet_callback(line)
+                    if line:
+                        self._dispatch_line(line)
         except serial.SerialException:
             pass

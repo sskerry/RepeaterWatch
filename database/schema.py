@@ -48,16 +48,18 @@ CREATE TABLE IF NOT EXISTS packet_log (
     id        INTEGER PRIMARY KEY AUTOINCREMENT,
     ts        INTEGER NOT NULL,
     direction TEXT,
+    pkt_type  INTEGER,
+    route     TEXT,
     snr       REAL,
     rssi      REAL,
     score     REAL,
-    hash      TEXT,
-    path      TEXT
+    hash      TEXT
 );
 
 CREATE TABLE IF NOT EXISTS neighbors (
     pubkey_prefix TEXT PRIMARY KEY,
     name          TEXT,
+    device_role   TEXT,
     last_seen     INTEGER,
     last_snr      REAL,
     lat           REAL,
@@ -75,10 +77,22 @@ CREATE INDEX IF NOT EXISTS idx_neighbor_sightings_ts ON neighbor_sightings(ts);
 """
 
 
+MIGRATIONS = [
+    "ALTER TABLE packet_log ADD COLUMN pkt_type INTEGER",
+    "ALTER TABLE packet_log ADD COLUMN route TEXT",
+    "ALTER TABLE neighbors ADD COLUMN device_role TEXT",
+]
+
+
 def init_db(db_path: str) -> sqlite3.Connection:
     conn = sqlite3.connect(db_path, check_same_thread=False)
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA busy_timeout=5000")
     conn.executescript(SCHEMA_SQL)
+    for sql in MIGRATIONS:
+        try:
+            conn.execute(sql)
+        except sqlite3.OperationalError:
+            pass  # column already exists
     conn.commit()
     return conn

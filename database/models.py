@@ -94,22 +94,23 @@ def insert_stats_extpower(ts: int, channels: list[dict]):
     _conn().commit()
 
 
-def insert_packet(ts: int, direction, snr, rssi, score, hash_, path):
+def insert_packet(ts: int, direction, pkt_type, route, snr, rssi, score, hash_):
     _conn().execute(
-        "INSERT INTO packet_log (ts, direction, snr, rssi, score, hash, path) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?)",
-        (ts, direction, snr, rssi, score, hash_, path),
+        "INSERT INTO packet_log (ts, direction, pkt_type, route, snr, rssi, score, hash) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        (ts, direction, pkt_type, route, snr, rssi, score, hash_),
     )
     _conn().commit()
 
 
-def upsert_neighbor(pubkey_prefix: str, name: str | None, last_seen: int,
-                    last_snr: float | None, lat: float | None, lon: float | None):
+def upsert_neighbor(pubkey_prefix: str, name: str | None, device_role: str | None,
+                    last_seen: int, last_snr: float | None,
+                    lat: float | None, lon: float | None):
     _conn().execute(
         "INSERT OR REPLACE INTO neighbors "
-        "(pubkey_prefix, name, last_seen, last_snr, lat, lon) "
-        "VALUES (?, ?, ?, ?, ?, ?)",
-        (pubkey_prefix, name, last_seen, last_snr, lat, lon),
+        "(pubkey_prefix, name, device_role, last_seen, last_snr, lat, lon) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?)",
+        (pubkey_prefix, name, device_role, last_seen, last_snr, lat, lon),
     )
     _conn().commit()
 
@@ -172,7 +173,7 @@ def query_stats_extpower(hours: int = 24) -> list[dict]:
 
 def query_packets_recent(limit: int = 50) -> list[dict]:
     rows = _conn().execute(
-        "SELECT id, ts, direction, snr, rssi, score, hash, path "
+        "SELECT id, ts, direction, pkt_type, route, snr, rssi, score, hash "
         "FROM packet_log ORDER BY id DESC LIMIT ?",
         (min(limit, 500),),
     ).fetchall()
@@ -196,7 +197,7 @@ def query_packets_activity(hours: int = 24, bucket_minutes: int = 15) -> list[di
 
 def query_neighbors() -> list[dict]:
     rows = _conn().execute(
-        "SELECT pubkey_prefix, name, last_seen, last_snr, lat, lon "
+        "SELECT pubkey_prefix, name, device_role, last_seen, last_snr, lat, lon "
         "FROM neighbors ORDER BY last_seen DESC"
     ).fetchall()
     return [dict(r) for r in rows]

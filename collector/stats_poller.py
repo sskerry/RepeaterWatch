@@ -8,7 +8,7 @@ import config
 from database import models
 from database.retention import purge_old_data
 from database.schema import init_db
-from collector.packet_parser import parse_packet_line
+from collector.packet_parser import parse_info_line, decode_advert
 from collector.serial_reader import SerialReader
 from collector.startup import collect_device_info
 
@@ -143,18 +143,46 @@ class StatsPoller:
                 channels.append({"voltage": v, "current": i, "power": p})
             models.insert_stats_extpower(ts, channels)
 
-    def _on_packet(self, line: str):
-        parsed = parse_packet_line(line)
+    def _on_packet(self, info_line: str, raw_hex: str | None):
+        parsed = parse_info_line(info_line)
         if not parsed:
             return
 
         ts = int(time.time())
+
+        # Log every packet
         models.insert_packet(
             ts,
             direction=parsed["direction"],
+            pkt_type=parsed["type"],
+            route=parsed["route"],
             snr=parsed["snr"],
             rssi=parsed["rssi"],
             score=parsed["score"],
             hash_=parsed["hash"],
-            path=parsed["path"],
         )
+
+        # Decode adverts (type=4) for neighbor tracking
+        if parsed["type"] == 4 and raw_hex:
+            advert = decode_advert(raw_hex)
+            if advert:
+                # Only track direct (0-hop) RX adverts as neighbors
+                if parsed["direction"] == "RX" and parsed["route"] == "D":
+                    models.upsert_neighbor(
+                        pubkey_prefix=advert["pubkey_prefix"],
+                        name=advert["name"],
+                        device_role=advert["device_role_name"],
+                        last_seen=ts,
+                        last_snr=parsed["snr"],
+                        lat=advert["lat"],
+                        lon=advert["lon"],
+                    )
+                    models.insert_neighbor_sighting(
+                        models.aligned_ts(ts),
+                        advert["pubkey_prefix"],
+                    )
+                    logger.info(
+                        "Neighbor: %s (%s) SNR=%s lat=%s lon=%s",
+                        advert["name"], advert["device_role_name"],
+                        parsed["snr"], advert["lat"], advert["lon"],
+                    )
