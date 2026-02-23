@@ -34,24 +34,20 @@
     <!-- Charts Grid -->
     <div class="charts-grid">
         <div class="chart-card">
-            <h3>Repeater Voltage</h3>
-            <div id="chart-battery" class="chart-container"></div>
+            <h3>Solar / Repeater Voltage</h3>
+            <div id="chart-voltage" class="chart-container"></div>
+        </div>
+        <div class="chart-card">
+            <h3>Solar / Repeater Current</h3>
+            <div id="chart-current" class="chart-container"></div>
+        </div>
+        <div class="chart-card">
+            <h3>Solar / Repeater Power</h3>
+            <div id="chart-power" class="chart-container"></div>
         </div>
         <div class="chart-card">
             <h3>Noise Floor</h3>
             <div id="chart-radio" class="chart-container"></div>
-        </div>
-        <div class="chart-card" id="card-voltage">
-            <h3>Solar / Repeater Voltage</h3>
-            <div id="chart-voltage" class="chart-container"></div>
-        </div>
-        <div class="chart-card" id="card-current">
-            <h3>Solar / Repeater Current</h3>
-            <div id="chart-current" class="chart-container"></div>
-        </div>
-        <div class="chart-card" id="card-power">
-            <h3>Solar / Repeater Power</h3>
-            <div id="chart-power" class="chart-container"></div>
         </div>
         <div class="chart-card">
             <h3>Airtime Utilization</h3>
@@ -109,7 +105,6 @@
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
     <!-- App JS -->
-    <script src="/static/js/charts/battery.js"></script>
     <script src="/static/js/charts/radio.js"></script>
     <script src="/static/js/charts/power.js"></script>
     <script src="/static/js/charts/packets.js"></script>

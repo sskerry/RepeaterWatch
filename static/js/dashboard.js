@@ -26,7 +26,6 @@
 
     function initCharts() {
         var theme = echartsTheme();
-        BatteryChart.init(document.getElementById('chart-battery'), theme);
         RadioChart.init(document.getElementById('chart-radio'), theme);
         PowerCharts.init(
             document.getElementById('chart-voltage'),
@@ -60,7 +59,6 @@
         }).catch(noop);
 
         fetchJSON('/api/v1/stats/power?hours=' + h).then(function (d) {
-            BatteryChart.update(d);
             PowerCharts.update(d);
         }).catch(noop);
 
@@ -184,7 +182,6 @@
     window.addEventListener('resize', function () {
         clearTimeout(resizeTimeout);
         resizeTimeout = setTimeout(function () {
-            BatteryChart.resize();
             RadioChart.resize();
             PowerCharts.resize();
             AirtimeChart.resize();
