@@ -8,6 +8,8 @@ STARTUP_COMMANDS = [
     ("get name", "name"),
     ("get public.key", "public_key"),
     ("get radio", "radio_config"),
+    ("get lat", "lat"),
+    ("get lon", "lon"),
     ("ver", "firmware"),
     ("board", "board"),
 ]

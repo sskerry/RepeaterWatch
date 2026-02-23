@@ -17,12 +17,25 @@ def device_info():
     info = models.get_device_info()
     core = models.query_stats_core(hours=1)
     uptime = core[-1]["uptime_secs"] if core else None
+    pk = info.get("public_key", "")
+    # pubkey_prefix: first 4 hex chars (2 bytes) for map label
+    pubkey_prefix = pk[:4].upper() if pk else ""
+    lat = None
+    lon = None
+    try:
+        lat = float(info["lat"]) if "lat" in info else None
+        lon = float(info["lon"]) if "lon" in info else None
+    except (ValueError, TypeError):
+        pass
     return jsonify({
         "name": info.get("name", "Unknown"),
         "firmware": info.get("firmware", "Unknown"),
         "board": info.get("board", "Unknown"),
         "radio_config": info.get("radio_config", "Unknown"),
-        "public_key": info.get("public_key", ""),
+        "public_key": pk,
+        "pubkey_prefix": pubkey_prefix,
+        "lat": lat,
+        "lon": lon,
         "uptime_secs": uptime,
     })
 
