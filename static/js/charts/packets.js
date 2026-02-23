@@ -1,6 +1,9 @@
 var PacketsChart = (function () {
     var chart = null;
 
+    var TT = { trigger: 'axis', backgroundColor: 'rgba(30,30,50,0.95)', borderColor: '#555', textStyle: { color: '#e0e0e0' } };
+    var AX = { axisLine: { lineStyle: { color: '#888' } }, splitLine: { lineStyle: { color: 'rgba(255,255,255,0.08)' } } };
+
     var SERIES = [
         { name: 'RX Direct',    color: '#06d6a0', stack: 'packets' },
         { name: 'RX Flood',     color: '#90e0c0', stack: 'packets' },
@@ -11,22 +14,18 @@ var PacketsChart = (function () {
         { name: 'RX Errors',    color: '#ef476f', stack: 'packets' },
     ];
 
-    function init(el, theme) {
-        chart = echarts.init(el, theme);
+    function init(el) {
+        chart = echarts.init(el);
         chart.setOption({
-            tooltip: {
-                trigger: 'axis',
-                backgroundColor: 'rgba(30, 30, 50, 0.95)',
-                borderColor: '#555',
-                textStyle: { color: '#e0e0e0' },
-            },
+            backgroundColor: 'transparent',
+            tooltip: TT,
             legend: {
                 data: SERIES.map(function (s) { return s.name; }),
-                textStyle: { fontSize: 11 },
+                textStyle: { fontSize: 11, color: '#aaa' },
                 top: 0,
             },
-            xAxis: { type: 'time' },
-            yAxis: { type: 'value', name: 'Count' },
+            xAxis: { type: 'time', axisLine: AX.axisLine },
+            yAxis: { type: 'value', name: 'Count', nameTextStyle: { color: '#888' }, axisLine: AX.axisLine, splitLine: AX.splitLine },
             dataZoom: [
                 { type: 'inside', xAxisIndex: 0 },
                 { type: 'slider', xAxisIndex: 0, height: 20, bottom: 5 },
@@ -66,23 +65,21 @@ var PacketsChart = (function () {
 var AirtimeChart = (function () {
     var chart = null;
 
-    function init(el, theme) {
-        chart = echarts.init(el, theme);
+    var TT = { trigger: 'axis', backgroundColor: 'rgba(30,30,50,0.95)', borderColor: '#555', textStyle: { color: '#e0e0e0' }, valueFormatter: function (v) { return v + '%'; } };
+    var AX = { axisLine: { lineStyle: { color: '#888' } }, splitLine: { lineStyle: { color: 'rgba(255,255,255,0.08)' } } };
+
+    function init(el) {
+        chart = echarts.init(el);
         chart.setOption({
-            tooltip: {
-                trigger: 'axis',
-                backgroundColor: 'rgba(30, 30, 50, 0.95)',
-                borderColor: '#555',
-                textStyle: { color: '#e0e0e0' },
-                valueFormatter: function (v) { return v + '%'; },
-            },
+            backgroundColor: 'transparent',
+            tooltip: TT,
             legend: {
                 data: ['TX %', 'RX %'],
-                textStyle: { fontSize: 11 },
+                textStyle: { fontSize: 11, color: '#aaa' },
                 top: 0,
             },
-            xAxis: { type: 'time' },
-            yAxis: { type: 'value', name: '%' },
+            xAxis: { type: 'time', axisLine: AX.axisLine },
+            yAxis: { type: 'value', name: '%', nameTextStyle: { color: '#888' }, axisLine: AX.axisLine, splitLine: AX.splitLine },
             dataZoom: [
                 { type: 'inside', xAxisIndex: 0 },
                 { type: 'slider', xAxisIndex: 0, height: 20, bottom: 5 },

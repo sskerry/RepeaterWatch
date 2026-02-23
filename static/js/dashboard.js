@@ -18,23 +18,17 @@
         localStorage.setItem('meshcore-theme', theme);
     }
 
-    function echartsTheme() {
-        return getTheme() === 'dark' ? 'dark' : null;
-    }
-
     // ── Init Charts ──────────────────────────────────────
 
     function initCharts() {
-        var theme = echartsTheme();
-        RadioChart.init(document.getElementById('chart-radio'), theme);
+        RadioChart.init(document.getElementById('chart-radio'));
         PowerCharts.init(
             document.getElementById('chart-voltage'),
             document.getElementById('chart-current'),
-            document.getElementById('chart-power'),
-            theme
+            document.getElementById('chart-power')
         );
-        AirtimeChart.init(document.getElementById('chart-airtime'), theme);
-        PacketsChart.init(document.getElementById('chart-packets'), theme);
+        AirtimeChart.init(document.getElementById('chart-airtime'));
+        PacketsChart.init(document.getElementById('chart-packets'));
         NeighborMap.init(document.getElementById('neighbor-map'));
     }
 

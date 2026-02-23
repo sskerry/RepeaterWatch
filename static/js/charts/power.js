@@ -6,21 +6,20 @@ var PowerCharts = (function () {
     var CH_COLORS = ['#ffd166', '#00b4d8'];
     var CH_NAMES = ['Solar', 'Repeater'];
 
+    var TT = { trigger: 'axis', backgroundColor: 'rgba(30,30,50,0.95)', borderColor: '#555', textStyle: { color: '#e0e0e0' } };
+    var AX = { axisLine: { lineStyle: { color: '#888' } }, splitLine: { lineStyle: { color: 'rgba(255,255,255,0.08)' } } };
+
     function makeOption(yName) {
         return {
-            tooltip: {
-                trigger: 'axis',
-                backgroundColor: 'rgba(30, 30, 50, 0.95)',
-                borderColor: '#555',
-                textStyle: { color: '#e0e0e0' },
-            },
+            backgroundColor: 'transparent',
+            tooltip: TT,
             legend: {
                 data: CH_NAMES,
-                textStyle: { fontSize: 11 },
+                textStyle: { fontSize: 11, color: '#aaa' },
                 top: 0,
             },
-            xAxis: { type: 'time' },
-            yAxis: { type: 'value', name: yName },
+            xAxis: { type: 'time', axisLine: AX.axisLine },
+            yAxis: { type: 'value', name: yName, nameTextStyle: { color: '#888' }, axisLine: AX.axisLine, splitLine: AX.splitLine },
             dataZoom: [
                 { type: 'inside', xAxisIndex: 0 },
                 { type: 'slider', xAxisIndex: 0, height: 20, bottom: 5 },
@@ -40,10 +39,10 @@ var PowerCharts = (function () {
         };
     }
 
-    function init(voltageEl, currentEl, powerEl, theme) {
-        voltageChart = echarts.init(voltageEl, theme);
-        currentChart = echarts.init(currentEl, theme);
-        powerChart = echarts.init(powerEl, theme);
+    function init(voltageEl, currentEl, powerEl) {
+        voltageChart = echarts.init(voltageEl);
+        currentChart = echarts.init(currentEl);
+        powerChart = echarts.init(powerEl);
         voltageChart.setOption(makeOption('V'));
         currentChart.setOption(makeOption('mA'));
         powerChart.setOption(makeOption('mW'));

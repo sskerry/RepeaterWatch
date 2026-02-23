@@ -1,19 +1,21 @@
 var RadioChart = (function () {
     var chart = null;
 
-    function init(el, theme) {
-        chart = echarts.init(el, theme);
+    var TT = { trigger: 'axis', backgroundColor: 'rgba(30,30,50,0.95)', borderColor: '#555', textStyle: { color: '#e0e0e0' } };
+    var AX = { axisLine: { lineStyle: { color: '#888' } }, splitLine: { lineStyle: { color: 'rgba(255,255,255,0.08)' } } };
+
+    function init(el) {
+        chart = echarts.init(el);
         chart.setOption({
-            tooltip: {
-                trigger: 'axis',
-                backgroundColor: 'rgba(30, 30, 50, 0.95)',
-                borderColor: '#555',
-                textStyle: { color: '#e0e0e0' },
-            },
-            xAxis: { type: 'time' },
+            backgroundColor: 'transparent',
+            tooltip: TT,
+            xAxis: { type: 'time', axisLine: AX.axisLine },
             yAxis: {
                 type: 'value',
                 name: 'dBm',
+                nameTextStyle: { color: '#888' },
+                axisLine: AX.axisLine,
+                splitLine: AX.splitLine,
             },
             dataZoom: [
                 { type: 'inside', xAxisIndex: 0 },
