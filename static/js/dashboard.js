@@ -340,7 +340,8 @@
                     clearInterval(fwPollTimer);
                     fwPollTimer = null;
                 }
-                document.getElementById('fw-flash-btn').disabled = false;
+                document.getElementById('fw-sha256').value = '';
+                document.getElementById('fw-flash-btn').disabled = true;
             }
         }).catch(noop);
     }
