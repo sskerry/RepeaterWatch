@@ -55,13 +55,30 @@ class SerialReader:
 
         with self._lock:
             try:
-                self._port.reset_input_buffer()
+                # Drain and process any pending lines before sending
+                self._drain_pending()
                 self._port.write(f"{command}\r\n".encode())
                 return self._read_response(timeout or config.SERIAL_TIMEOUT)
             except serial.SerialException as e:
                 logger.error("Serial error sending '%s': %s", command, e)
                 self._connected = False
                 return None
+
+    def _drain_pending(self):
+        """Read and dispatch any lines waiting in the serial buffer."""
+        saved_timeout = self._port.timeout
+        self._port.timeout = 0.05
+        try:
+            while self._port.in_waiting:
+                raw = self._port.readline()
+                if raw:
+                    line = raw.decode("utf-8", errors="replace").strip()
+                    if line:
+                        self._dispatch_line(line)
+        except serial.SerialException:
+            pass
+        finally:
+            self._port.timeout = saved_timeout
 
     def _read_response(self, timeout: float) -> str:
         lines = []
