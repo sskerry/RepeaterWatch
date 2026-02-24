@@ -1,4 +1,4 @@
-# MeshCore_RepeaterPiMonitor
+# RepeaterWatch
 
 ## Sudoers Configuration
 

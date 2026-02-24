@@ -112,6 +112,8 @@ MIGRATIONS = [
     "ALTER TABLE neighbor_sightings ADD COLUMN rssi REAL",
     "ALTER TABLE packet_log ADD COLUMN raw_hex TEXT",
     "ALTER TABLE stats_packets ADD COLUMN flood_dups INTEGER",
+    "ALTER TABLE stats_radio ADD COLUMN last_rssi REAL",
+    "ALTER TABLE stats_radio ADD COLUMN last_snr REAL",
 ]
 
 

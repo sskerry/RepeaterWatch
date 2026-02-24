@@ -58,11 +58,12 @@ def insert_stats_core(ts: int, battery_mv, uptime_secs, errors, queue_len):
     _conn().commit()
 
 
-def insert_stats_radio(ts: int, noise_floor, tx_air_secs, rx_air_secs):
+def insert_stats_radio(ts: int, noise_floor, tx_air_secs, rx_air_secs,
+                       last_rssi=None, last_snr=None):
     _conn().execute(
-        "INSERT OR REPLACE INTO stats_radio (ts, noise_floor, tx_air_secs, rx_air_secs) "
-        "VALUES (?, ?, ?, ?)",
-        (ts, noise_floor, tx_air_secs, rx_air_secs),
+        "INSERT OR REPLACE INTO stats_radio (ts, noise_floor, tx_air_secs, rx_air_secs, last_rssi, last_snr) "
+        "VALUES (?, ?, ?, ?, ?, ?)",
+        (ts, noise_floor, tx_air_secs, rx_air_secs, last_rssi, last_snr),
     )
     _conn().commit()
 
@@ -147,7 +148,7 @@ def query_stats_core(hours: int = 24) -> list[dict]:
 
 def query_stats_radio(hours: int = 24) -> list[dict]:
     rows = _conn().execute(
-        "SELECT ts, noise_floor, tx_air_secs, rx_air_secs "
+        "SELECT ts, noise_floor, tx_air_secs, rx_air_secs, last_rssi, last_snr "
         "FROM stats_radio WHERE ts >= ? ORDER BY ts",
         (_since(hours),),
     ).fetchall()

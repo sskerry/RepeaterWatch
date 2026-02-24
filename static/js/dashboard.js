@@ -14,14 +14,14 @@
     // ── Theme ────────────────────────────────────────────
 
     function getTheme() {
-        var saved = localStorage.getItem('meshcore-theme');
+        var saved = localStorage.getItem('repeaterwatch-theme');
         if (saved) return saved;
         return window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
     }
 
     function applyTheme(theme) {
         document.documentElement.setAttribute('data-theme', theme);
-        localStorage.setItem('meshcore-theme', theme);
+        localStorage.setItem('repeaterwatch-theme', theme);
     }
 
     // ── Init Charts ──────────────────────────────────────

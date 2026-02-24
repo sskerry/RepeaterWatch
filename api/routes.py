@@ -70,6 +70,8 @@ def stats_radio():
         "noise_floor": [r["noise_floor"] for r in rows],
         "tx_air_secs": [r["tx_air_secs"] for r in rows],
         "rx_air_secs": [r["rx_air_secs"] for r in rows],
+        "last_rssi": [r["last_rssi"] for r in rows],
+        "last_snr": [r["last_snr"] for r in rows],
     })
 
 

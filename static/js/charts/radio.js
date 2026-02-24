@@ -9,40 +9,40 @@ var RadioChart = (function () {
         chart.setOption({
             backgroundColor: 'transparent',
             tooltip: TT,
-            xAxis: { type: 'time', axisLine: AX.axisLine },
-            yAxis: {
-                type: 'value',
-                name: 'dBm',
-                nameTextStyle: { color: '#888' },
-                axisLine: AX.axisLine,
-                splitLine: AX.splitLine,
+            legend: {
+                data: ['Noise Floor', 'Last RSSI', 'Last SNR'],
+                textStyle: { fontSize: 11, color: '#aaa' },
+                top: 0,
             },
+            xAxis: { type: 'time', axisLine: AX.axisLine },
+            yAxis: [
+                { type: 'value', name: 'dBm', nameTextStyle: { color: '#888' }, axisLine: AX.axisLine, splitLine: AX.splitLine },
+                { type: 'value', name: 'dB', nameTextStyle: { color: '#888' }, axisLine: AX.axisLine, splitLine: { show: false } },
+            ],
             dataZoom: [
                 { type: 'inside', xAxisIndex: 0 },
                 { type: 'slider', xAxisIndex: 0, height: 20, bottom: 5 },
             ],
-            series: [{
-                name: 'Noise Floor',
-                type: 'line',
-                smooth: true,
-                symbol: 'none',
-                lineStyle: { width: 2, color: '#ffd166' },
-                itemStyle: { color: '#ffd166' },
-                areaStyle: { opacity: 0.1, color: '#ffd166' },
-                data: [],
-            }],
-            grid: { left: 50, right: 16, top: 20, bottom: 50 },
+            series: [
+                { name: 'Noise Floor', type: 'line', smooth: true, symbol: 'none', yAxisIndex: 0, lineStyle: { width: 2, color: '#ffd166' }, itemStyle: { color: '#ffd166' }, areaStyle: { opacity: 0.1, color: '#ffd166' }, data: [] },
+                { name: 'Last RSSI', type: 'line', smooth: true, symbol: 'none', yAxisIndex: 0, lineStyle: { width: 2, color: '#ef476f' }, itemStyle: { color: '#ef476f' }, data: [] },
+                { name: 'Last SNR', type: 'line', smooth: true, symbol: 'none', yAxisIndex: 1, lineStyle: { width: 2, color: '#06d6a0' }, itemStyle: { color: '#06d6a0' }, data: [] },
+            ],
+            grid: { left: 50, right: 50, top: 30, bottom: 50 },
         });
         return chart;
     }
 
     function update(data) {
         if (!chart) return;
-        var series = [];
+        var nf = [], rssi = [], snr = [];
         for (var i = 0; i < data.timestamps.length; i++) {
-            series.push([data.timestamps[i] * 1000, data.noise_floor[i]]);
+            var t = data.timestamps[i] * 1000;
+            nf.push([t, data.noise_floor[i]]);
+            rssi.push([t, data.last_rssi[i]]);
+            snr.push([t, data.last_snr[i]]);
         }
-        chart.setOption({ series: [{ data: series }] });
+        chart.setOption({ series: [{ data: nf }, { data: rssi }, { data: snr }] });
     }
 
     return { init: init, update: update, resize: function () { if (chart) chart.resize(); } };

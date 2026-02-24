@@ -125,6 +125,8 @@ class StatsPoller:
                 noise_floor=data.get("noise_floor"),
                 tx_air_secs=data.get("tx_air_secs"),
                 rx_air_secs=data.get("rx_air_secs"),
+                last_rssi=data.get("last_rssi"),
+                last_snr=data.get("last_snr"),
             )
 
         # stats-packets

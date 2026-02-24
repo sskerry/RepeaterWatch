@@ -372,7 +372,7 @@ td.dir-rx { color: var(--green); }
     color: var(--text-muted);
 }
 
-/* Status Cards (shared by MeshCore + Pi tabs) */
+/* Status Cards (shared by Repeater + Pi tabs) */
 .status-grid {
     display: flex;
     flex-wrap: wrap;
