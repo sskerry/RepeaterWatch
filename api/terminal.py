@@ -1,8 +1,10 @@
+import fcntl
 import logging
 import os
 import pty
 import select
 import subprocess
+import termios
 import threading
 import time
 
@@ -20,12 +22,16 @@ def register_terminal_routes(sock):
         master_fd, slave_fd = pty.openpty()
         stop = threading.Event()
 
+        def child_setup():
+            os.setsid()
+            fcntl.ioctl(slave_fd, termios.TIOCSCTTY, 0)
+
         proc = subprocess.Popen(
             ["/bin/login"],
             stdin=slave_fd,
             stdout=slave_fd,
             stderr=slave_fd,
-            preexec_fn=os.setsid,
+            preexec_fn=child_setup,
             env={"TERM": "xterm-256color", "PATH": "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"},
         )
         os.close(slave_fd)
