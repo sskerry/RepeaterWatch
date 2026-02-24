@@ -280,15 +280,42 @@
                 <pre id="fw-log" class="fw-log" style="display:none;"></pre>
             </div>
 
-            <!-- Reboot Radio Card -->
+            <!-- Services Card -->
+            <div class="tool-card">
+                <div class="tool-card-header">
+                    <span class="tool-icon">&#x2699;</span>
+                    <h3>Services</h3>
+                </div>
+                <div class="service-list" id="service-list">
+                    <div class="service-row" data-service="mctomqtt">
+                        <span class="service-dot"></span>
+                        <span class="service-name">mctomqtt</span>
+                        <span class="service-uptime">--</span>
+                        <button class="restart-btn" data-service="mctomqtt">Restart</button>
+                    </div>
+                    <div class="service-row" data-service="SerialMux">
+                        <span class="service-dot"></span>
+                        <span class="service-name">SerialMux</span>
+                        <span class="service-uptime">--</span>
+                        <button class="restart-btn" data-service="SerialMux">Restart</button>
+                    </div>
+                    <div class="service-row" data-service="RepeaterWatch">
+                        <span class="service-dot"></span>
+                        <span class="service-name">RepeaterWatch</span>
+                        <span class="service-uptime">--</span>
+                        <button class="restart-btn" data-service="RepeaterWatch">Restart</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Reboot Pi Card -->
             <div class="tool-card">
                 <div class="tool-card-header">
                     <span class="tool-icon">&#x1F504;</span>
-                    <h3>Reboot Radio</h3>
+                    <h3>Reboot Pi</h3>
                 </div>
-                <p class="tool-desc">Hard reboot the radio via relay GPIO. Useful for recovering from lockups.</p>
-                <button id="reboot-radio-btn" class="reboot-btn" disabled>Reboot Radio</button>
-                <p class="tool-note">Coming soon &mdash; requires relay hardware.</p>
+                <p class="tool-desc">Reboot the Raspberry Pi. All services will restart automatically.</p>
+                <button id="reboot-pi-btn" class="reboot-btn">Reboot Pi</button>
             </div>
 
             <!-- Terminal Card -->

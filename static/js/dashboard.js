@@ -191,6 +191,7 @@
                 resizeCharts();
             }, 50);
             refreshMeshCore();
+            stopServicesRefresh();
         } else if (tabId === 'raspberry-pi') {
             if (!piChartsInitialized) {
                 initPiCharts();
@@ -199,6 +200,9 @@
                 resizePiCharts();
             }, 50);
             refreshPiHealth();
+            stopServicesRefresh();
+        } else if (tabId === 'tools') {
+            startServicesRefresh();
         }
     }
 
@@ -521,10 +525,77 @@
         });
     }
 
-    function setupRebootRadio() {
-        document.getElementById('reboot-radio-btn').addEventListener('click', function () {
-            alert('Reboot Radio is not yet implemented. A relay-based hard reboot will be added in a future update.');
+    // ── Services & Reboot Pi ─────────────────────────────
+
+    var servicesTimer = null;
+
+    function setupServices() {
+        document.querySelectorAll('.restart-btn').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                var name = btn.getAttribute('data-service');
+                if (!confirm('Restart service "' + name + '"?')) return;
+                btn.disabled = true;
+                btn.textContent = 'Restarting...';
+                fetch('/api/v1/services/' + encodeURIComponent(name) + '/restart', { method: 'POST' })
+                    .then(function (r) { return r.json(); })
+                    .then(function () {
+                        btn.textContent = 'Restarted';
+                        setTimeout(function () {
+                            btn.textContent = 'Restart';
+                            btn.disabled = false;
+                            refreshServices();
+                        }, 3000);
+                    })
+                    .catch(function () {
+                        btn.textContent = 'Error';
+                        setTimeout(function () {
+                            btn.textContent = 'Restart';
+                            btn.disabled = false;
+                        }, 3000);
+                    });
+            });
         });
+
+        document.getElementById('reboot-pi-btn').addEventListener('click', function () {
+            if (!confirm('Reboot the Raspberry Pi? All services will go down.')) return;
+            var btn = this;
+            btn.disabled = true;
+            btn.textContent = 'Rebooting...';
+            fetch('/api/v1/system/reboot', { method: 'POST' })
+                .then(function (r) { return r.json(); })
+                .catch(noop);
+        });
+    }
+
+    function refreshServices() {
+        fetchJSON('/api/v1/services').then(function (services) {
+            services.forEach(function (svc) {
+                var row = document.querySelector('.service-row[data-service="' + svc.name + '"]');
+                if (!row) return;
+                var dot = row.querySelector('.service-dot');
+                var uptimeEl = row.querySelector('.service-uptime');
+                dot.classList.toggle('active', svc.active);
+                dot.classList.toggle('inactive', !svc.active);
+                if (svc.active && svc.uptime_secs != null) {
+                    uptimeEl.textContent = formatUptime(svc.uptime_secs);
+                } else {
+                    uptimeEl.textContent = svc.active ? '--' : 'stopped';
+                }
+            });
+        }).catch(function (e) { console.warn('Services fetch failed:', e); });
+    }
+
+    function startServicesRefresh() {
+        refreshServices();
+        if (servicesTimer) clearInterval(servicesTimer);
+        servicesTimer = setInterval(refreshServices, 30000);
+    }
+
+    function stopServicesRefresh() {
+        if (servicesTimer) {
+            clearInterval(servicesTimer);
+            servicesTimer = null;
+        }
     }
 
     function startFwPolling() {
@@ -712,7 +783,7 @@
     setupThemeToggle();
     setupMapFullscreen();
     setupFirmwareFlash();
-    setupRebootRadio();
+    setupServices();
     setupTerminal();
 
     refreshTimer = setInterval(refreshAll, REFRESH_INTERVAL);

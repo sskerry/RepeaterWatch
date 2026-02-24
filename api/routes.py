@@ -1,5 +1,7 @@
 import os
 import platform
+import subprocess
+import threading
 import time
 
 from flask import Blueprint, jsonify, request, current_app
@@ -14,6 +16,8 @@ try:
     HAS_PSUTIL = True
 except ImportError:
     HAS_PSUTIL = False
+
+MANAGED_SERVICES = ["mctomqtt", "SerialMux", "RepeaterWatch"]
 
 api = Blueprint("api", __name__, url_prefix="/api/v1")
 
@@ -344,3 +348,58 @@ def firmware_flash():
 @api.route("/firmware/status")
 def firmware_status():
     return jsonify(firmware_flasher.get_status())
+
+
+# ── Service Management ───────────────────────────────────
+
+def _get_service_info(name):
+    try:
+        result = subprocess.run(
+            ["systemctl", "show", name,
+             "--property=ActiveState,ActiveEnterTimestampMonotonic"],
+            capture_output=True, text=True, timeout=5,
+        )
+        props = {}
+        for line in result.stdout.strip().splitlines():
+            if "=" in line:
+                k, v = line.split("=", 1)
+                props[k] = v
+
+        active = props.get("ActiveState", "") == "active"
+        uptime_secs = None
+        if active:
+            mono_us = int(props.get("ActiveEnterTimestampMonotonic", "0"))
+            if mono_us > 0:
+                # Read system monotonic clock to compute uptime
+                now_mono = time.clock_gettime(time.CLOCK_MONOTONIC)
+                uptime_secs = max(0, int(now_mono - mono_us / 1_000_000))
+        return {"name": name, "active": active, "uptime_secs": uptime_secs}
+    except Exception:
+        return {"name": name, "active": False, "uptime_secs": None}
+
+
+@api.route("/services")
+def list_services():
+    return jsonify([_get_service_info(s) for s in MANAGED_SERVICES])
+
+
+@api.route("/services/<name>/restart", methods=["POST"])
+def restart_service(name):
+    if name not in MANAGED_SERVICES:
+        return jsonify({"error": "Unknown service"}), 400
+
+    def do_restart():
+        subprocess.run(["systemctl", "restart", name], timeout=30)
+
+    # Delay so the HTTP response sends before we potentially kill ourselves
+    threading.Timer(1.0, do_restart).start()
+    return jsonify({"status": "ok"})
+
+
+@api.route("/system/reboot", methods=["POST"])
+def system_reboot():
+    def do_reboot():
+        subprocess.run(["systemctl", "reboot"], timeout=10)
+
+    threading.Timer(2.0, do_reboot).start()
+    return jsonify({"status": "rebooting"})
