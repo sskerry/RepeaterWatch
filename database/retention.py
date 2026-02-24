@@ -10,6 +10,7 @@ TABLES_WITH_TS = [
     "stats_radio",
     "stats_packets",
     "stats_extpower",
+    "stats_pi_health",
     "packet_log",
     "neighbor_sightings",
 ]

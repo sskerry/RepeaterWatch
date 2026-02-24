@@ -273,6 +273,91 @@ def query_airtime(hours: int = 24) -> list[dict]:
     return result
 
 
+def insert_stats_pi_health(ts: int, cpu_percent, load_1, load_5, load_15,
+                           mem_used_mb, mem_total_mb, mem_percent,
+                           swap_used_mb, swap_total_mb, cpu_temp,
+                           disk_used_gb, disk_total_gb, disk_percent,
+                           disk_read_bytes, disk_write_bytes,
+                           net_bytes_sent, net_bytes_recv,
+                           uptime_secs, process_count):
+    _conn().execute(
+        "INSERT OR REPLACE INTO stats_pi_health "
+        "(ts, cpu_percent, load_1, load_5, load_15, "
+        "mem_used_mb, mem_total_mb, mem_percent, swap_used_mb, swap_total_mb, "
+        "cpu_temp, disk_used_gb, disk_total_gb, disk_percent, "
+        "disk_read_bytes, disk_write_bytes, net_bytes_sent, net_bytes_recv, "
+        "uptime_secs, process_count) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        (ts, cpu_percent, load_1, load_5, load_15,
+         mem_used_mb, mem_total_mb, mem_percent, swap_used_mb, swap_total_mb,
+         cpu_temp, disk_used_gb, disk_total_gb, disk_percent,
+         disk_read_bytes, disk_write_bytes, net_bytes_sent, net_bytes_recv,
+         uptime_secs, process_count),
+    )
+    _conn().commit()
+
+
+def query_stats_pi_health(hours: int = 24) -> list[dict]:
+    rows = _conn().execute(
+        "SELECT ts, cpu_percent, load_1, load_5, load_15, "
+        "mem_used_mb, mem_total_mb, mem_percent, swap_used_mb, swap_total_mb, "
+        "cpu_temp, disk_used_gb, disk_total_gb, disk_percent, "
+        "disk_read_bytes, disk_write_bytes, net_bytes_sent, net_bytes_recv, "
+        "uptime_secs, process_count "
+        "FROM stats_pi_health WHERE ts >= ? ORDER BY ts",
+        (_since(hours),),
+    ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def query_pi_disk_io(hours: int = 24) -> list[dict]:
+    rows = _conn().execute(
+        "SELECT ts, disk_read_bytes, disk_write_bytes "
+        "FROM stats_pi_health WHERE ts >= ? ORDER BY ts",
+        (_since(hours),),
+    ).fetchall()
+    result = []
+    prev = None
+    for r in rows:
+        row = dict(r)
+        if prev is not None:
+            dt = row["ts"] - prev["ts"]
+            if dt > 0:
+                read_delta = (row["disk_read_bytes"] or 0) - (prev["disk_read_bytes"] or 0)
+                write_delta = (row["disk_write_bytes"] or 0) - (prev["disk_write_bytes"] or 0)
+                result.append({
+                    "ts": row["ts"],
+                    "read_kbs": round(max(0, read_delta) / dt / 1024, 2),
+                    "write_kbs": round(max(0, write_delta) / dt / 1024, 2),
+                })
+        prev = row
+    return result
+
+
+def query_pi_network_io(hours: int = 24) -> list[dict]:
+    rows = _conn().execute(
+        "SELECT ts, net_bytes_sent, net_bytes_recv "
+        "FROM stats_pi_health WHERE ts >= ? ORDER BY ts",
+        (_since(hours),),
+    ).fetchall()
+    result = []
+    prev = None
+    for r in rows:
+        row = dict(r)
+        if prev is not None:
+            dt = row["ts"] - prev["ts"]
+            if dt > 0:
+                sent_delta = (row["net_bytes_sent"] or 0) - (prev["net_bytes_sent"] or 0)
+                recv_delta = (row["net_bytes_recv"] or 0) - (prev["net_bytes_recv"] or 0)
+                result.append({
+                    "ts": row["ts"],
+                    "sent_kbs": round(max(0, sent_delta) / dt / 1024, 2),
+                    "recv_kbs": round(max(0, recv_delta) / dt / 1024, 2),
+                })
+        prev = row
+    return result
+
+
 def db_size_bytes() -> int:
     import os
     try:

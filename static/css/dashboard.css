@@ -349,35 +349,75 @@ td.dir-rx { color: var(--green); }
 }
 .pkt-hex:hover { opacity: 1; }
 
-/* Placeholder Panel (Raspberry Pi) */
-.placeholder-panel {
+/* Pi Time Controls */
+.pi-time-controls {
+    background: var(--bg-card);
+    border-bottom: 1px solid var(--border);
+    padding: 8px 20px;
     display: flex;
-    flex-direction: column;
     align-items: center;
-    justify-content: center;
-    min-height: 400px;
-    padding: 60px 20px;
-    text-align: center;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+
+#pi-last-update {
+    margin-left: auto;
+    font-size: 0.8rem;
     color: var(--text-muted);
 }
 
-.placeholder-icon {
-    font-size: 3.5rem;
-    margin-bottom: 16px;
-    opacity: 0.5;
+/* Pi Status Cards */
+.pi-status-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    padding: 16px 20px 0;
 }
 
-.placeholder-panel h2 {
-    font-size: 1.3rem;
+.pi-status-card {
+    flex: 1 1 140px;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 140px;
+}
+
+.pi-status-label {
+    font-size: 0.75rem;
     font-weight: 600;
-    color: var(--text);
-    margin-bottom: 8px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-muted);
 }
 
-.placeholder-panel p {
-    font-size: 0.9rem;
-    max-width: 360px;
-    line-height: 1.5;
+.pi-status-value {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--text);
+    font-variant-numeric: tabular-nums;
+}
+
+.pi-status-sub {
+    font-size: 0.78rem;
+    color: var(--text-muted);
+    font-variant-numeric: tabular-nums;
+}
+
+/* Temperature threshold colors */
+.pi-status-value.temp-cool {
+    color: var(--green);
+}
+
+.pi-status-value.temp-warm {
+    color: var(--yellow);
+}
+
+.pi-status-value.temp-hot {
+    color: var(--red);
 }
 
 /* Tools Tab */
@@ -735,5 +775,13 @@ footer strong {
     .tools-grid {
         grid-template-columns: 1fr;
         padding: 12px;
+    }
+
+    .pi-status-grid {
+        padding: 12px 12px 0;
+    }
+
+    .pi-time-controls {
+        padding: 8px 12px;
     }
 }

@@ -1,10 +1,18 @@
 from __future__ import annotations
 
 import logging
+import os
 import threading
 import time
 
 import config
+
+try:
+    import psutil
+    HAS_PSUTIL = True
+except ImportError:
+    HAS_PSUTIL = False
+
 from database import models
 from database.retention import purge_old_data
 from database.schema import init_db
@@ -144,6 +152,57 @@ class StatsPoller:
                 p = (v_mv * i_ma / 1000.0) if v_mv is not None and i_ma is not None else None
                 channels.append({"voltage": v, "current": i, "power": p})
             models.insert_stats_extpower(ts, channels)
+
+        # Pi health (local — no serial needed)
+        self._poll_pi_health(ts)
+
+    def _poll_pi_health(self, ts: int):
+        if not HAS_PSUTIL:
+            return
+        try:
+            cpu_pct = psutil.cpu_percent(interval=1)
+            load_1, load_5, load_15 = os.getloadavg()
+            mem = psutil.virtual_memory()
+            swap = psutil.swap_memory()
+
+            cpu_temp = None
+            temps = psutil.sensors_temperatures()
+            if temps:
+                for key in ("cpu_thermal", "cpu-thermal", "coretemp"):
+                    if key in temps and temps[key]:
+                        cpu_temp = temps[key][0].current
+                        break
+
+            disk = psutil.disk_usage("/")
+            disk_io = psutil.disk_io_counters()
+            net_io = psutil.net_io_counters()
+            uptime = int(time.time() - psutil.boot_time())
+            proc_count = len(psutil.pids())
+
+            models.insert_stats_pi_health(
+                ts,
+                cpu_percent=cpu_pct,
+                load_1=round(load_1, 2),
+                load_5=round(load_5, 2),
+                load_15=round(load_15, 2),
+                mem_used_mb=round(mem.used / 1048576, 1),
+                mem_total_mb=round(mem.total / 1048576, 1),
+                mem_percent=mem.percent,
+                swap_used_mb=round(swap.used / 1048576, 1),
+                swap_total_mb=round(swap.total / 1048576, 1),
+                cpu_temp=cpu_temp,
+                disk_used_gb=round(disk.used / 1073741824, 2),
+                disk_total_gb=round(disk.total / 1073741824, 2),
+                disk_percent=disk.percent,
+                disk_read_bytes=disk_io.read_bytes if disk_io else None,
+                disk_write_bytes=disk_io.write_bytes if disk_io else None,
+                net_bytes_sent=net_io.bytes_sent if net_io else None,
+                net_bytes_recv=net_io.bytes_recv if net_io else None,
+                uptime_secs=uptime,
+                process_count=proc_count,
+            )
+        except Exception:
+            logger.exception("Error collecting Pi health metrics")
 
     def _on_packet(self, info_line: str, raw_hex: str | None):
         parsed = parse_info_line(info_line)

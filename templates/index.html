@@ -126,10 +126,94 @@
 
     <!-- Tab: Raspberry Pi -->
     <div id="tab-raspberry-pi" class="tab-panel">
-        <div class="placeholder-panel">
-            <div class="placeholder-icon">&#x1F353;</div>
-            <h2>Raspberry Pi Health</h2>
-            <p>CPU, memory, temperature, and storage monitoring coming soon.</p>
+        <!-- Pi Time Range Selector -->
+        <nav class="pi-time-controls">
+            <button class="time-btn pi-time-btn" data-hours="1">1h</button>
+            <button class="time-btn pi-time-btn active" data-hours="6">6h</button>
+            <button class="time-btn pi-time-btn" data-hours="24">24h</button>
+            <button class="time-btn pi-time-btn" data-hours="168">7d</button>
+            <button class="time-btn pi-time-btn" data-hours="720">30d</button>
+            <span id="pi-last-update">--</span>
+        </nav>
+
+        <!-- Status Cards -->
+        <div class="pi-status-grid">
+            <div class="pi-status-card">
+                <span class="pi-status-label">CPU</span>
+                <span class="pi-status-value" id="pi-cpu-val">--%</span>
+                <span class="pi-status-sub" id="pi-cpu-sub">-- cores</span>
+            </div>
+            <div class="pi-status-card">
+                <span class="pi-status-label">Memory</span>
+                <span class="pi-status-value" id="pi-mem-val">--%</span>
+                <span class="pi-status-sub" id="pi-mem-sub">-- / -- MB</span>
+            </div>
+            <div class="pi-status-card">
+                <span class="pi-status-label">Temperature</span>
+                <span class="pi-status-value" id="pi-temp-val">--</span>
+                <span class="pi-status-sub" id="pi-temp-sub">CPU thermal</span>
+            </div>
+            <div class="pi-status-card">
+                <span class="pi-status-label">Disk</span>
+                <span class="pi-status-value" id="pi-disk-val">--%</span>
+                <span class="pi-status-sub" id="pi-disk-sub">-- / -- GB</span>
+            </div>
+            <div class="pi-status-card">
+                <span class="pi-status-label">Load Average</span>
+                <span class="pi-status-value" id="pi-load-val">--</span>
+                <span class="pi-status-sub" id="pi-load-sub">1m / 5m / 15m</span>
+            </div>
+            <div class="pi-status-card">
+                <span class="pi-status-label">Uptime</span>
+                <span class="pi-status-value" id="pi-uptime-val">--</span>
+                <span class="pi-status-sub" id="pi-uptime-sub">-- processes</span>
+            </div>
+        </div>
+
+        <!-- Pi Charts Grid -->
+        <div class="charts-grid">
+            <div class="chart-card">
+                <h3>CPU Usage / Load</h3>
+                <div id="chart-pi-cpu" class="chart-container"></div>
+            </div>
+            <div class="chart-card">
+                <h3>Memory Usage</h3>
+                <div id="chart-pi-memory" class="chart-container"></div>
+            </div>
+            <div class="chart-card">
+                <h3>CPU Temperature</h3>
+                <div id="chart-pi-temp" class="chart-container"></div>
+            </div>
+            <div class="chart-card">
+                <h3>Disk Usage</h3>
+                <div id="chart-pi-disk" class="chart-container"></div>
+            </div>
+            <div class="chart-card">
+                <h3>Disk I/O</h3>
+                <div id="chart-pi-diskio" class="chart-container"></div>
+            </div>
+            <div class="chart-card">
+                <h3>Network I/O</h3>
+                <div id="chart-pi-netio" class="chart-container"></div>
+            </div>
+        </div>
+
+        <!-- Top Processes Table -->
+        <div class="full-width-card">
+            <h3>Top Processes (by Memory)</h3>
+            <div class="table-scroll">
+                <table id="pi-processes-table">
+                    <thead>
+                        <tr>
+                            <th>PID</th>
+                            <th>Name</th>
+                            <th>CPU %</th>
+                            <th>Memory %</th>
+                        </tr>
+                    </thead>
+                    <tbody id="pi-processes-tbody"></tbody>
+                </table>
+            </div>
         </div>
     </div>
 
@@ -210,6 +294,7 @@
     <script src="/static/js/charts/radio.js"></script>
     <script src="/static/js/charts/power.js"></script>
     <script src="/static/js/charts/packets.js"></script>
+    <script src="/static/js/charts/pi_health.js"></script>
     <script src="/static/js/map.js"></script>
     <script src="/static/js/dashboard.js"></script>
 </body>

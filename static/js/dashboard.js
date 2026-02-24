@@ -8,6 +8,9 @@
     var activeTab = 'meshcore';
     var chartsInitialized = false;
 
+    var piChartsInitialized = false;
+    var piCurrentHours = 6;
+
     // ── Theme ────────────────────────────────────────────
 
     function getTheme() {
@@ -44,6 +47,108 @@
         NeighborMap.invalidateSize();
     }
 
+    // ── Pi Charts ───────────────────────────────────────
+
+    function initPiCharts() {
+        PiCpuChart.init(document.getElementById('chart-pi-cpu'));
+        PiMemoryChart.init(document.getElementById('chart-pi-memory'));
+        PiTempChart.init(document.getElementById('chart-pi-temp'));
+        PiDiskChart.init(document.getElementById('chart-pi-disk'));
+        PiDiskIoChart.init(document.getElementById('chart-pi-diskio'));
+        PiNetworkChart.init(document.getElementById('chart-pi-netio'));
+        piChartsInitialized = true;
+    }
+
+    function resizePiCharts() {
+        PiCpuChart.resize();
+        PiMemoryChart.resize();
+        PiTempChart.resize();
+        PiDiskChart.resize();
+        PiDiskIoChart.resize();
+        PiNetworkChart.resize();
+    }
+
+    function refreshPiHealth() {
+        var h = piCurrentHours;
+
+        fetchJSON('/api/v1/stats/pi/health?hours=' + h).then(function (d) {
+            PiCpuChart.update(d);
+            PiMemoryChart.update(d);
+            PiTempChart.update(d);
+            PiDiskChart.update(d);
+        }).catch(noop);
+
+        fetchJSON('/api/v1/stats/pi/disk-io?hours=' + h).then(function (d) {
+            PiDiskIoChart.update(d);
+        }).catch(noop);
+
+        fetchJSON('/api/v1/stats/pi/network-io?hours=' + h).then(function (d) {
+            PiNetworkChart.update(d);
+        }).catch(noop);
+
+        fetchJSON('/api/v1/stats/pi/snapshot').then(function (d) {
+            updatePiStatusCards(d);
+            renderPiProcesses(d.top_processes || []);
+        }).catch(noop);
+
+        document.getElementById('pi-last-update').textContent = 'Updated: ' + new Date().toLocaleTimeString();
+    }
+
+    function updatePiStatusCards(d) {
+        document.getElementById('pi-cpu-val').textContent = (d.cpu_percent != null ? d.cpu_percent.toFixed(1) + '%' : '--%');
+        document.getElementById('pi-cpu-sub').textContent = (d.per_cpu ? d.per_cpu.length + ' cores' : '-- cores');
+
+        document.getElementById('pi-mem-val').textContent = (d.mem_percent != null ? d.mem_percent.toFixed(1) + '%' : '--%');
+        document.getElementById('pi-mem-sub').textContent = (d.mem_used_mb != null ? d.mem_used_mb.toFixed(0) + ' / ' + d.mem_total_mb.toFixed(0) + ' MB' : '-- / -- MB');
+
+        var tempEl = document.getElementById('pi-temp-val');
+        if (d.cpu_temp != null) {
+            tempEl.textContent = d.cpu_temp.toFixed(1) + '\u00b0C';
+            tempEl.className = 'pi-status-value';
+            if (d.cpu_temp >= 80) tempEl.classList.add('temp-hot');
+            else if (d.cpu_temp >= 60) tempEl.classList.add('temp-warm');
+            else tempEl.classList.add('temp-cool');
+        } else {
+            tempEl.textContent = 'N/A';
+            tempEl.className = 'pi-status-value';
+        }
+
+        document.getElementById('pi-disk-val').textContent = (d.disk_percent != null ? d.disk_percent.toFixed(1) + '%' : '--%');
+        document.getElementById('pi-disk-sub').textContent = (d.disk_used_gb != null ? d.disk_used_gb.toFixed(1) + ' / ' + d.disk_total_gb.toFixed(1) + ' GB' : '-- / -- GB');
+
+        document.getElementById('pi-load-val').textContent = (d.load_1 != null ? d.load_1.toFixed(2) : '--');
+        document.getElementById('pi-load-sub').textContent = (d.load_1 != null ? d.load_1.toFixed(2) + ' / ' + d.load_5.toFixed(2) + ' / ' + d.load_15.toFixed(2) : '1m / 5m / 15m');
+
+        document.getElementById('pi-uptime-val').textContent = formatUptime(d.uptime_secs);
+        document.getElementById('pi-uptime-sub').textContent = (d.process_count != null ? d.process_count + ' processes' : '-- processes');
+    }
+
+    function renderPiProcesses(procs) {
+        var tbody = document.getElementById('pi-processes-tbody');
+        tbody.innerHTML = '';
+        procs.forEach(function (p) {
+            var tr = document.createElement('tr');
+            tr.innerHTML =
+                '<td>' + p.pid + '</td>' +
+                '<td>' + (p.name || '--') + '</td>' +
+                '<td>' + p.cpu_percent.toFixed(1) + '</td>' +
+                '<td>' + p.memory_percent.toFixed(1) + '</td>';
+            tbody.appendChild(tr);
+        });
+    }
+
+    function setupPiTimeButtons() {
+        var buttons = document.querySelectorAll('.pi-time-btn');
+        buttons.forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                buttons.forEach(function (b) { b.classList.remove('active'); });
+                btn.classList.add('active');
+                piCurrentHours = parseInt(btn.getAttribute('data-hours'), 10);
+                refreshPiHealth();
+            });
+        });
+    }
+
     // ── Tabs ─────────────────────────────────────────────
 
     function setupTabs() {
@@ -74,11 +179,18 @@
             if (!chartsInitialized) {
                 initCharts();
             }
-            // Charts need a resize after becoming visible
             setTimeout(function () {
                 resizeCharts();
             }, 50);
             refreshMeshCore();
+        } else if (tabId === 'raspberry-pi') {
+            if (!piChartsInitialized) {
+                initPiCharts();
+            }
+            setTimeout(function () {
+                resizePiCharts();
+            }, 50);
+            refreshPiHealth();
         }
     }
 
@@ -154,6 +266,8 @@
         refreshHeader();
         if (activeTab === 'meshcore') {
             refreshMeshCore();
+        } else if (activeTab === 'raspberry-pi') {
+            refreshPiHealth();
         }
     }
 
@@ -302,8 +416,14 @@
             if (activeTab === 'meshcore') {
                 initCharts();
                 refreshMeshCore();
+                piChartsInitialized = false;
+            } else if (activeTab === 'raspberry-pi') {
+                initPiCharts();
+                refreshPiHealth();
+                chartsInitialized = false;
             } else {
                 chartsInitialized = false;
+                piChartsInitialized = false;
             }
         });
     }
@@ -545,6 +665,9 @@
             if (activeTab === 'meshcore' && chartsInitialized) {
                 resizeCharts();
             }
+            if (activeTab === 'raspberry-pi' && piChartsInitialized) {
+                resizePiCharts();
+            }
             if (terminalConnected && terminalFitAddon) {
                 terminalFitAddon.fit();
             }
@@ -558,6 +681,7 @@
     initCharts();
     refreshAll();
     setupTimeButtons();
+    setupPiTimeButtons();
     setupThemeToggle();
     setupMapFullscreen();
     setupFirmwareFlash();

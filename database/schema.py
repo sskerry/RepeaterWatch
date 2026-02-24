@@ -44,6 +44,29 @@ CREATE TABLE IF NOT EXISTS stats_extpower (
     ch2_power    REAL
 );
 
+CREATE TABLE IF NOT EXISTS stats_pi_health (
+    ts               INTEGER PRIMARY KEY,
+    cpu_percent      REAL,
+    load_1           REAL,
+    load_5           REAL,
+    load_15          REAL,
+    mem_used_mb      REAL,
+    mem_total_mb     REAL,
+    mem_percent      REAL,
+    swap_used_mb     REAL,
+    swap_total_mb    REAL,
+    cpu_temp         REAL,
+    disk_used_gb     REAL,
+    disk_total_gb    REAL,
+    disk_percent     REAL,
+    disk_read_bytes  INTEGER,
+    disk_write_bytes INTEGER,
+    net_bytes_sent   INTEGER,
+    net_bytes_recv   INTEGER,
+    uptime_secs      INTEGER,
+    process_count    INTEGER
+);
+
 CREATE TABLE IF NOT EXISTS packet_log (
     id        INTEGER PRIMARY KEY AUTOINCREMENT,
     ts        INTEGER NOT NULL,

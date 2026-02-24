@@ -1,4 +1,6 @@
 import os
+import platform
+import time
 
 from flask import Blueprint, jsonify, request, current_app
 from werkzeug.utils import secure_filename
@@ -6,6 +8,12 @@ from werkzeug.utils import secure_filename
 import config
 from database import models
 from collector import firmware_flasher
+
+try:
+    import psutil
+    HAS_PSUTIL = True
+except ImportError:
+    HAS_PSUTIL = False
 
 api = Blueprint("api", __name__, url_prefix="/api/v1")
 
@@ -178,6 +186,115 @@ def status():
     return jsonify({
         **poller_status,
         "db_size_bytes": models.db_size_bytes(),
+    })
+
+
+@api.route("/stats/pi/health")
+def stats_pi_health():
+    rows = models.query_stats_pi_health(_hours())
+    return jsonify({
+        "timestamps":     [r["ts"] for r in rows],
+        "cpu_percent":    [r["cpu_percent"] for r in rows],
+        "load_1":         [r["load_1"] for r in rows],
+        "load_5":         [r["load_5"] for r in rows],
+        "load_15":        [r["load_15"] for r in rows],
+        "mem_used_mb":    [r["mem_used_mb"] for r in rows],
+        "mem_total_mb":   [r["mem_total_mb"] for r in rows],
+        "mem_percent":    [r["mem_percent"] for r in rows],
+        "swap_used_mb":   [r["swap_used_mb"] for r in rows],
+        "swap_total_mb":  [r["swap_total_mb"] for r in rows],
+        "cpu_temp":       [r["cpu_temp"] for r in rows],
+        "disk_used_gb":   [r["disk_used_gb"] for r in rows],
+        "disk_total_gb":  [r["disk_total_gb"] for r in rows],
+        "disk_percent":   [r["disk_percent"] for r in rows],
+        "uptime_secs":    [r["uptime_secs"] for r in rows],
+        "process_count":  [r["process_count"] for r in rows],
+    })
+
+
+@api.route("/stats/pi/disk-io")
+def stats_pi_disk_io():
+    rows = models.query_pi_disk_io(_hours())
+    return jsonify({
+        "timestamps": [r["ts"] for r in rows],
+        "read_kbs":   [r["read_kbs"] for r in rows],
+        "write_kbs":  [r["write_kbs"] for r in rows],
+    })
+
+
+@api.route("/stats/pi/network-io")
+def stats_pi_network_io():
+    rows = models.query_pi_network_io(_hours())
+    return jsonify({
+        "timestamps": [r["ts"] for r in rows],
+        "sent_kbs":   [r["sent_kbs"] for r in rows],
+        "recv_kbs":   [r["recv_kbs"] for r in rows],
+    })
+
+
+@api.route("/stats/pi/snapshot")
+def stats_pi_snapshot():
+    if not HAS_PSUTIL:
+        return jsonify({"error": "psutil not installed"}), 501
+
+    cpu_pct = psutil.cpu_percent(interval=0)
+    per_cpu = psutil.cpu_percent(interval=0, percpu=True)
+    load_1, load_5, load_15 = os.getloadavg()
+    mem = psutil.virtual_memory()
+    swap = psutil.swap_memory()
+
+    cpu_temp = None
+    temps = psutil.sensors_temperatures()
+    if temps:
+        for key in ("cpu_thermal", "cpu-thermal", "coretemp"):
+            if key in temps and temps[key]:
+                cpu_temp = temps[key][0].current
+                break
+
+    disk = psutil.disk_usage("/")
+    uptime = int(time.time() - psutil.boot_time())
+    proc_count = len(psutil.pids())
+
+    # Top 10 processes by memory
+    top_procs = []
+    for p in psutil.process_iter(["pid", "name", "cpu_percent", "memory_percent"]):
+        try:
+            info = p.info
+            top_procs.append({
+                "pid": info["pid"],
+                "name": info["name"],
+                "cpu_percent": round(info["cpu_percent"] or 0, 1),
+                "memory_percent": round(info["memory_percent"] or 0, 1),
+            })
+        except (psutil.NoSuchProcess, psutil.AccessDenied):
+            pass
+    top_procs.sort(key=lambda x: x["memory_percent"], reverse=True)
+    top_procs = top_procs[:10]
+
+    return jsonify({
+        "cpu_percent": cpu_pct,
+        "per_cpu": per_cpu,
+        "load_1": round(load_1, 2),
+        "load_5": round(load_5, 2),
+        "load_15": round(load_15, 2),
+        "mem_used_mb": round(mem.used / 1048576, 1),
+        "mem_total_mb": round(mem.total / 1048576, 1),
+        "mem_percent": mem.percent,
+        "swap_used_mb": round(swap.used / 1048576, 1),
+        "swap_total_mb": round(swap.total / 1048576, 1),
+        "cpu_temp": cpu_temp,
+        "disk_used_gb": round(disk.used / 1073741824, 2),
+        "disk_total_gb": round(disk.total / 1073741824, 2),
+        "disk_percent": disk.percent,
+        "uptime_secs": uptime,
+        "process_count": proc_count,
+        "top_processes": top_procs,
+        "platform": {
+            "system": platform.system(),
+            "release": platform.release(),
+            "machine": platform.machine(),
+            "python": platform.python_version(),
+        },
     })
 
 
