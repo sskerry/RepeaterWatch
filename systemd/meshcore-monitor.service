@@ -4,7 +4,6 @@ After=network.target
 
 [Service]
 Type=simple
-User=meshcoremon
 WorkingDirectory=/opt/meshcore-monitor
 ExecStart=/opt/meshcore-monitor/venv/bin/python app.py
 Restart=always
