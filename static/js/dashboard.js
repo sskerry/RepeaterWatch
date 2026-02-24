@@ -86,6 +86,10 @@
 
     function fetchJSON(url) {
         return fetch(url).then(function (r) {
+            if (r.status === 401) {
+                window.location.href = '/login';
+                throw new Error('Unauthorized');
+            }
             if (!r.ok) throw new Error(r.status);
             return r.json();
         });
@@ -414,6 +418,124 @@
         el.scrollTop = el.scrollHeight;
     }
 
+    // ── Terminal ───────────────────────────────────────────
+
+    var terminalInstance = null;
+    var terminalWs = null;
+    var terminalFitAddon = null;
+    var terminalMode = 'pty';
+    var terminalConnected = false;
+
+    function setupTerminal() {
+        var modeBtns = document.querySelectorAll('.terminal-mode-btn');
+        var connectBtn = document.getElementById('terminal-connect-btn');
+
+        modeBtns.forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                if (terminalConnected) return;
+                modeBtns.forEach(function (b) { b.classList.remove('active'); });
+                btn.classList.add('active');
+                terminalMode = btn.getAttribute('data-mode');
+            });
+        });
+
+        connectBtn.addEventListener('click', function () {
+            if (terminalConnected) {
+                disconnectTerminal();
+            } else {
+                connectTerminal();
+            }
+        });
+    }
+
+    function connectTerminal() {
+        var container = document.getElementById('terminal-container');
+        var termEl = document.getElementById('xterm-terminal');
+        var connectBtn = document.getElementById('terminal-connect-btn');
+        var statusEl = document.getElementById('terminal-status');
+        var modeBtns = document.querySelectorAll('.terminal-mode-btn');
+
+        container.style.display = 'block';
+
+        if (terminalInstance) {
+            terminalInstance.dispose();
+            terminalInstance = null;
+        }
+        termEl.innerHTML = '';
+
+        terminalInstance = new Terminal({
+            cursorBlink: true,
+            fontSize: 14,
+            fontFamily: '"Cascadia Code", "Fira Code", "Source Code Pro", monospace',
+            theme: {
+                background: '#000000',
+                foreground: '#e0e0e0'
+            }
+        });
+
+        terminalFitAddon = new FitAddon.FitAddon();
+        terminalInstance.loadAddon(terminalFitAddon);
+
+        if (typeof WebLinksAddon !== 'undefined') {
+            terminalInstance.loadAddon(new WebLinksAddon.WebLinksAddon());
+        }
+
+        terminalInstance.open(termEl);
+        terminalFitAddon.fit();
+
+        var wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        var wsPath = terminalMode === 'pty' ? '/ws/terminal/pty' : '/ws/terminal/serial';
+        var wsUrl = wsProtocol + '//' + window.location.host + wsPath;
+
+        terminalWs = new WebSocket(wsUrl);
+        terminalWs.binaryType = 'arraybuffer';
+
+        terminalWs.onopen = function () {
+            terminalConnected = true;
+            connectBtn.textContent = 'Disconnect';
+            connectBtn.classList.add('connected');
+            statusEl.textContent = 'Connected (' + (terminalMode === 'pty' ? 'Pi Console' : 'Serial ttyV2') + ')';
+            statusEl.className = 'terminal-status connected';
+            modeBtns.forEach(function (b) { b.disabled = true; });
+            terminalInstance.focus();
+        };
+
+        terminalWs.onmessage = function (ev) {
+            if (ev.data instanceof ArrayBuffer) {
+                terminalInstance.write(new Uint8Array(ev.data));
+            } else {
+                terminalInstance.write(ev.data);
+            }
+        };
+
+        terminalWs.onclose = function () {
+            terminalConnected = false;
+            connectBtn.textContent = 'Connect';
+            connectBtn.classList.remove('connected');
+            statusEl.textContent = 'Disconnected';
+            statusEl.className = 'terminal-status';
+            modeBtns.forEach(function (b) { b.disabled = false; });
+        };
+
+        terminalWs.onerror = function () {
+            statusEl.textContent = 'Connection error';
+            statusEl.className = 'terminal-status error';
+        };
+
+        terminalInstance.onData(function (data) {
+            if (terminalWs && terminalWs.readyState === WebSocket.OPEN) {
+                terminalWs.send(data);
+            }
+        });
+    }
+
+    function disconnectTerminal() {
+        if (terminalWs) {
+            terminalWs.close();
+            terminalWs = null;
+        }
+    }
+
     // ── Resize ───────────────────────────────────────────
 
     var resizeTimeout;
@@ -422,6 +544,9 @@
         resizeTimeout = setTimeout(function () {
             if (activeTab === 'meshcore' && chartsInitialized) {
                 resizeCharts();
+            }
+            if (terminalConnected && terminalFitAddon) {
+                terminalFitAddon.fit();
             }
         }, 200);
     });
@@ -437,6 +562,7 @@
     setupMapFullscreen();
     setupFirmwareFlash();
     setupRebootRadio();
+    setupTerminal();
 
     refreshTimer = setInterval(refreshAll, REFRESH_INTERVAL);
 })();

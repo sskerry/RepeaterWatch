@@ -20,3 +20,9 @@ FLASH_SERIAL_PORT = os.environ.get(
 FIRMWARE_UPLOAD_DIR = os.environ.get("MESHCORE_FIRMWARE_UPLOAD_DIR", "/tmp/meshcore-fw")
 
 MAX_QUERY_HOURS = 720  # 30 days
+
+SECRET_KEY = os.environ.get("MESHCORE_SECRET_KEY", None)
+PASSWORD = os.environ.get("MESHCORE_PASSWORD", None)
+
+TERMINAL_SERIAL_PORT = os.environ.get("MESHCORE_TERMINAL_SERIAL_PORT", "/dev/ttyV2")
+TERMINAL_SERIAL_BAUD = int(os.environ.get("MESHCORE_TERMINAL_SERIAL_BAUD", "115200"))

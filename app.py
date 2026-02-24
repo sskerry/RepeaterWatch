@@ -1,13 +1,16 @@
 import logging
+import os
 import signal
 import sys
 
-from flask import Flask
+from flask import Flask, jsonify, redirect, render_template, request, session, url_for
+from flask_sock import Sock
 
 import config
 from database.schema import init_db
 from database import models
 from api.routes import api
+from api.terminal import register_terminal_routes
 from collector.stats_poller import StatsPoller
 
 logging.basicConfig(
@@ -19,6 +22,7 @@ logger = logging.getLogger(__name__)
 
 def create_app() -> Flask:
     app = Flask(__name__)
+    app.secret_key = config.SECRET_KEY or os.urandom(24)
 
     # Initialize database
     init_db(config.DB_PATH)
@@ -27,11 +31,48 @@ def create_app() -> Flask:
     # Register API blueprint
     app.register_blueprint(api)
 
+    # Initialize WebSocket support
+    sock = Sock(app)
+    register_terminal_routes(sock)
+
+    # Authentication
+    @app.before_request
+    def require_auth():
+        if config.PASSWORD is None:
+            return None
+
+        # Allow login page and static files without auth
+        if request.endpoint in ("login", "static"):
+            return None
+
+        if session.get("authenticated"):
+            return None
+
+        # API / WebSocket paths get 401; browser pages get redirected
+        if request.path.startswith("/api/") or request.path.startswith("/ws/"):
+            return jsonify({"error": "Authentication required"}), 401
+
+        return redirect(url_for("login"))
+
+    @app.route("/login", methods=["GET", "POST"])
+    def login():
+        error = None
+        if request.method == "POST":
+            if request.form.get("password") == config.PASSWORD:
+                session["authenticated"] = True
+                return redirect(url_for("index"))
+            error = "Invalid password"
+        return render_template("login.html", error=error)
+
+    @app.route("/logout")
+    def logout():
+        session.clear()
+        return redirect(url_for("login"))
+
     # Root route serves dashboard
     @app.route("/")
     def index():
-        from flask import render_template
-        return render_template("index.html")
+        return render_template("index.html", auth_enabled=bool(config.PASSWORD))
 
     # Start collector
     poller = StatsPoller()
