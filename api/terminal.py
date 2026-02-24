@@ -1,10 +1,8 @@
-import fcntl
 import logging
 import os
 import pty
 import select
-import subprocess
-import termios
+import signal
 import threading
 import time
 
@@ -19,22 +17,17 @@ def register_terminal_routes(sock):
 
     @sock.route("/ws/terminal/pty")
     def terminal_pty(ws):
-        master_fd, slave_fd = pty.openpty()
+        child_pid, master_fd = pty.fork()
+
+        if child_pid == 0:
+            # Child — exec login; this replaces the process entirely
+            os.environ.clear()
+            os.environ["TERM"] = "xterm-256color"
+            os.environ["PATH"] = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+            os.execv("/bin/login", ["/bin/login"])
+
+        # Parent
         stop = threading.Event()
-
-        def child_setup():
-            os.setsid()
-            fcntl.ioctl(slave_fd, termios.TIOCSCTTY, 0)
-
-        proc = subprocess.Popen(
-            ["/bin/login"],
-            stdin=slave_fd,
-            stdout=slave_fd,
-            stderr=slave_fd,
-            preexec_fn=child_setup,
-            env={"TERM": "xterm-256color", "PATH": "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"},
-        )
-        os.close(slave_fd)
 
         def reader():
             try:
@@ -64,10 +57,10 @@ def register_terminal_routes(sock):
         finally:
             stop.set()
             try:
-                proc.terminate()
-                proc.wait(timeout=2)
+                os.kill(child_pid, signal.SIGHUP)
+                os.waitpid(child_pid, 0)
             except Exception:
-                proc.kill()
+                pass
             try:
                 os.close(master_fd)
             except OSError:
