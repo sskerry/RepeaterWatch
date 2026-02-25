@@ -59,6 +59,9 @@ class StatsPoller:
         self._connect_with_retry()
 
         if self.reader.connected:
+            # Give the radio a moment to finish booting before sending commands
+            time.sleep(2)
+            self.reader.read_background_lines()
             collect_device_info(self.reader)
 
         while not self._stop_event.is_set():

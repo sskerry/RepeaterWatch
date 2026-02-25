@@ -15,6 +15,9 @@ STARTUP_COMMANDS = [
 ]
 
 
+ERROR_RESPONSES = {"unknown command", "error", "invalid"}
+
+
 def collect_device_info(reader):
     for cmd, key in STARTUP_COMMANDS:
         resp = reader.send_command(cmd)
@@ -22,6 +25,9 @@ def collect_device_info(reader):
             value = resp.strip()
             if value.startswith("> "):
                 value = value[2:]
+            if value.lower() in ERROR_RESPONSES:
+                logger.warning("Command '%s' not supported: %s", cmd, value)
+                continue
             models.set_device_info(key, value)
             logger.info("Device %s: %s", key, value)
         else:
