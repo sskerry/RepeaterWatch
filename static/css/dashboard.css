@@ -691,36 +691,115 @@ td.dir-rx { color: var(--green); }
     border-color: #e65100;
 }
 
-.fw-status {
-    font-size: 0.85rem;
-    font-weight: 600;
-    margin-top: 10px;
+/* Firmware Flash Modal */
+.fw-modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(0, 0, 0, 0.7);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10000;
 }
 
-.fw-status.state-flashing { color: var(--yellow); }
-.fw-status.state-done { color: var(--green); }
-.fw-status.state-error { color: var(--red); }
+.fw-modal {
+    background: #1a1a2e;
+    border: 1px solid #2a2a45;
+    border-radius: 10px;
+    width: 700px;
+    max-width: 95vw;
+    max-height: 80vh;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+}
 
-.fw-log {
+.fw-modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 18px;
+    border-bottom: 1px solid #2a2a45;
+    flex-shrink: 0;
+}
+
+.fw-modal-title {
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: #e0e0e0;
+}
+
+.fw-modal-status {
+    font-size: 0.85rem;
+    font-weight: 600;
+}
+
+.fw-modal-status.state-flashing { color: var(--yellow); }
+.fw-modal-status.state-done { color: var(--green); }
+.fw-modal-status.state-error { color: var(--red); }
+
+.fw-modal-log {
     background: #0a0a0a;
     color: #ccc;
-    font-family: monospace;
+    font-family: 'Cascadia Code', 'Fira Code', 'Source Code Pro', monospace;
     font-size: 0.78rem;
-    padding: 10px;
-    border-radius: 4px;
-    max-height: 300px;
+    padding: 12px 14px;
+    margin: 0;
+    flex: 1;
     overflow-y: auto;
     white-space: pre-wrap;
     word-break: break-all;
-    line-height: 1.5;
-    border: 1px solid #222;
-    margin-top: 10px;
+    line-height: 1.6;
+    min-height: 200px;
 }
 
-[data-theme="light"] .fw-log {
+.fw-modal-footer {
+    padding: 12px 18px;
+    border-top: 1px solid #2a2a45;
+    text-align: center;
+    flex-shrink: 0;
+}
+
+.fw-modal-close-btn {
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    padding: 8px 28px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.85rem;
+    font-weight: 600;
+    transition: background 0.15s;
+}
+
+.fw-modal-close-btn:hover {
+    filter: brightness(0.85);
+}
+
+[data-theme="light"] .fw-modal {
+    background: #fff;
+    border-color: #d0d0e0;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+}
+
+[data-theme="light"] .fw-modal-header {
+    border-bottom-color: #d0d0e0;
+}
+
+[data-theme="light"] .fw-modal-title {
+    color: #1a1a2e;
+}
+
+[data-theme="light"] .fw-modal-log {
     background: #f5f5f5;
     color: #222;
-    border-color: #ccc;
+}
+
+[data-theme="light"] .fw-modal-footer {
+    border-top-color: #d0d0e0;
 }
 
 /* Footer */

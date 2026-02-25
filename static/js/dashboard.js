@@ -313,6 +313,15 @@
         document.getElementById('mc-rx-val').textContent = (rxDirect + rxFlood).toLocaleString();
         document.getElementById('mc-rx-sub').textContent = rxDirect + ' direct / ' + rxFlood + ' flood';
         document.getElementById('mc-err-val').textContent = rxErrors.toLocaleString();
+
+        var totalMinutes = d.timestamps.length * bucketForHours(currentHours);
+        var txRate = totalMinutes > 0 ? ((txDirect + txFlood) / totalMinutes) : 0;
+        var rxRate = totalMinutes > 0 ? ((rxDirect + rxFlood) / totalMinutes) : 0;
+
+        document.getElementById('mc-txrate-val').textContent = txRate.toFixed(1);
+        document.getElementById('mc-txrate-sub').textContent = (txDirect + txFlood) + ' pkts / ' + totalMinutes + ' min';
+        document.getElementById('mc-rxrate-val').textContent = rxRate.toFixed(1);
+        document.getElementById('mc-rxrate-sub').textContent = (rxDirect + rxFlood) + ' pkts / ' + totalMinutes + ' min';
     }
 
     function refreshAll() {
@@ -533,14 +542,19 @@
             formData.append('sha256', hashInput.value.trim());
 
             flashBtn.disabled = true;
-            showFwStatus('flashing', 'Uploading firmware...');
-            showFwLog('');
+
+            // Open the modal
+            document.getElementById('fw-modal-overlay').style.display = 'flex';
+            document.getElementById('fw-modal-log').textContent = '';
+            document.getElementById('fw-modal-footer').style.display = 'none';
+            showFwStatus('flashing', 'Uploading...');
 
             fetch('/api/v1/firmware/flash', { method: 'POST', body: formData })
                 .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, data: d }; }); })
                 .then(function (resp) {
                     if (!resp.ok) {
                         showFwStatus('error', resp.data.error || 'Upload failed');
+                        document.getElementById('fw-modal-footer').style.display = '';
                         flashBtn.disabled = false;
                         return;
                     }
@@ -548,8 +562,14 @@
                 })
                 .catch(function (err) {
                     showFwStatus('error', 'Network error: ' + err.message);
+                    document.getElementById('fw-modal-footer').style.display = '';
                     flashBtn.disabled = false;
                 });
+        });
+
+        // Modal close handler
+        document.getElementById('fw-modal-close').addEventListener('click', function () {
+            document.getElementById('fw-modal-overlay').style.display = 'none';
         });
     }
 
@@ -688,23 +708,22 @@
                     clearInterval(fwPollTimer);
                     fwPollTimer = null;
                 }
+                // Show modal close button and re-enable flash button
+                document.getElementById('fw-modal-footer').style.display = '';
+                document.getElementById('fw-flash-btn').disabled = false;
                 document.getElementById('fw-sha256').value = '';
-                document.getElementById('fw-flash-btn').disabled = true;
             }
         }).catch(noop);
     }
 
     function showFwStatus(state, text) {
-        var el = document.getElementById('fw-status');
-        var span = document.getElementById('fw-status-text');
-        el.style.display = text ? 'block' : 'none';
-        el.className = 'fw-status state-' + state;
-        span.textContent = text;
+        var el = document.getElementById('fw-modal-status');
+        el.className = 'fw-modal-status state-' + state;
+        el.textContent = text || '';
     }
 
     function showFwLog(text) {
-        var el = document.getElementById('fw-log');
-        el.style.display = text ? 'block' : 'none';
+        var el = document.getElementById('fw-modal-log');
         el.textContent = text;
         el.scrollTop = el.scrollHeight;
     }

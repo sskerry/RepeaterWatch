@@ -22,7 +22,9 @@ def collect_device_info(reader):
     for cmd, key in STARTUP_COMMANDS:
         resp = reader.send_command(cmd)
         if resp:
-            value = resp.strip()
+            # Take only the first line to avoid unsolicited serial
+            # output bleeding into the value.
+            value = resp.strip().split("\n", 1)[0].strip()
             if value.startswith("> "):
                 value = value[2:]
             if value.lower() in ERROR_RESPONSES:

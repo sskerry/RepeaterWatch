@@ -72,6 +72,16 @@
                 <span class="status-value" id="mc-err-val">--</span>
                 <span class="status-sub" id="mc-err-sub">RX errors</span>
             </div>
+            <div class="status-card">
+                <span class="status-label">Sent/Min</span>
+                <span class="status-value" id="mc-txrate-val">--</span>
+                <span class="status-sub" id="mc-txrate-sub">avg over period</span>
+            </div>
+            <div class="status-card">
+                <span class="status-label">Recv/Min</span>
+                <span class="status-value" id="mc-rxrate-val">--</span>
+                <span class="status-sub" id="mc-rxrate-sub">avg over period</span>
+            </div>
         </div>
 
         <!-- Charts Grid -->
@@ -279,10 +289,6 @@
                     <input type="text" id="fw-sha256" placeholder="Expected SHA256 hash" spellcheck="false" />
                     <button id="fw-flash-btn" class="flash-btn" disabled>Flash</button>
                 </div>
-                <div id="fw-status" class="fw-status" style="display:none;">
-                    <span id="fw-status-text"></span>
-                </div>
-                <pre id="fw-log" class="fw-log" style="display:none;"></pre>
             </div>
 
             <!-- Services Card -->
@@ -416,6 +422,20 @@
         <span>Polls: <strong id="footer-polls">--</strong></span>
         <button id="theme-toggle" title="Toggle dark/light mode">Toggle Theme</button>
     </footer>
+
+    <!-- Firmware Flash Modal -->
+    <div id="fw-modal-overlay" class="fw-modal-overlay" style="display:none;">
+        <div class="fw-modal">
+            <div class="fw-modal-header">
+                <span class="fw-modal-title">Firmware Update</span>
+                <span class="fw-modal-status" id="fw-modal-status"></span>
+            </div>
+            <pre class="fw-modal-log" id="fw-modal-log"></pre>
+            <div class="fw-modal-footer" id="fw-modal-footer" style="display:none;">
+                <button id="fw-modal-close" class="fw-modal-close-btn">Close</button>
+            </div>
+        </div>
+    </div>
 
     <!-- JS Libraries from CDN -->
     <script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>

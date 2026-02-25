@@ -105,6 +105,9 @@ class SerialReader:
                 content = line[3:]
                 if content:
                     lines.append(content)
+                    # Single-line response complete; stop capturing so
+                    # unsolicited output doesn't bleed into the value.
+                    break
                 continue
 
             if capture:
