@@ -597,7 +597,36 @@
 
     function setupRebootRadio() {
         document.getElementById('reboot-radio-btn').addEventListener('click', function () {
-            alert('Reboot Radio is not yet implemented. A relay-based hard reboot will be added in a future update.');
+            if (!confirm('Reset the radio? It will be unavailable for a few seconds.')) return;
+            var btn = this;
+            btn.disabled = true;
+            btn.textContent = 'Resetting...';
+            fetch('/api/v1/radio/reset', { method: 'POST' })
+                .then(function (r) { return r.json(); })
+                .then(function () {
+                    btn.textContent = 'Reset sent';
+                    setTimeout(function () { btn.textContent = 'Reset Radio'; btn.disabled = false; }, 5000);
+                })
+                .catch(function () {
+                    btn.textContent = 'Error';
+                    setTimeout(function () { btn.textContent = 'Reset Radio'; btn.disabled = false; }, 3000);
+                });
+        });
+
+        document.getElementById('bootloader-radio-btn').addEventListener('click', function () {
+            if (!confirm('Enter bootloader mode? The radio will stop working until firmware is flashed.')) return;
+            var btn = this;
+            btn.disabled = true;
+            btn.textContent = 'Entering bootloader...';
+            fetch('/api/v1/radio/bootloader', { method: 'POST' })
+                .then(function (r) { return r.json(); })
+                .then(function () {
+                    btn.textContent = 'Bootloader active';
+                })
+                .catch(function () {
+                    btn.textContent = 'Error';
+                    setTimeout(function () { btn.textContent = 'Bootloader Mode'; btn.disabled = false; }, 3000);
+                });
         });
     }
 

@@ -10,6 +10,7 @@ from werkzeug.utils import secure_filename
 import config
 from database import models
 from collector import firmware_flasher
+from collector import radio_gpio
 
 try:
     import psutil
@@ -441,3 +442,34 @@ def system_reboot():
 
     threading.Timer(2.0, do_reboot).start()
     return jsonify({"status": "rebooting"})
+
+
+@api.route("/radio/reset", methods=["POST"])
+def radio_reset():
+    poller = current_app.config.get("poller")
+
+    def do_reset():
+        try:
+            if poller:
+                poller.stop()
+            radio_gpio.reset_radio()
+            time.sleep(2)  # wait for radio to boot
+        finally:
+            if poller:
+                poller.start()
+
+    threading.Thread(target=do_reset, daemon=True).start()
+    return jsonify({"status": "ok"})
+
+
+@api.route("/radio/bootloader", methods=["POST"])
+def radio_bootloader():
+    poller = current_app.config.get("poller")
+
+    def do_bootloader():
+        if poller:
+            poller.stop()
+        radio_gpio.bootloader_mode()
+
+    threading.Thread(target=do_bootloader, daemon=True).start()
+    return jsonify({"status": "ok"})

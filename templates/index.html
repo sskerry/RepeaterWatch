@@ -313,15 +313,17 @@
                 </div>
             </div>
 
-            <!-- Reboot Radio Card -->
+            <!-- Radio GPIO Card -->
             <div class="tool-card">
                 <div class="tool-card-header">
                     <span class="tool-icon">&#x1F504;</span>
-                    <h3>Reboot Radio</h3>
+                    <h3>Radio Control</h3>
                 </div>
-                <p class="tool-desc">Hard reboot the radio via relay GPIO. Useful for recovering from lockups.</p>
-                <button id="reboot-radio-btn" class="reboot-btn" disabled>Reboot Radio</button>
-                <p class="tool-note">Coming soon &mdash; requires relay hardware.</p>
+                <p class="tool-desc">Hardware reset the radio via GPIO, or enter bootloader mode for firmware updates.</p>
+                <div class="radio-control-btns">
+                    <button id="reboot-radio-btn" class="reboot-btn">Reset Radio</button>
+                    <button id="bootloader-radio-btn" class="reboot-btn bootloader-btn">Bootloader Mode</button>
+                </div>
             </div>
 
             <!-- Reboot Pi Card -->
