@@ -43,6 +43,20 @@ def _reset_state():
         _state["progress"] = ""
 
 
+def _set_usb_relay(enable: bool):
+    """Toggle the USB relay via pinctrl."""
+    pin = str(config.USB_RELAY_GPIO_PIN)
+    level = "dh" if enable else "dl"
+    try:
+        subprocess.run(
+            ["pinctrl", "set", pin, "op", level],
+            capture_output=True, text=True, timeout=5, check=True,
+        )
+        logger.info("USB relay %s (GPIO %s)", "enabled" if enable else "disabled", pin)
+    except Exception as e:
+        logger.warning("Failed to set USB relay: %s", e)
+
+
 def verify_sha256(path: str, expected: str) -> bool:
     h = hashlib.sha256()
     with open(path, "rb") as f:
@@ -113,6 +127,12 @@ def _flash_worker(fw_path: str, expected_hash: str, poller) -> None:
         _cleanup(fw_path)
         _append_log("Done.")
         return
+
+    # Enable USB relay so the DFU port appears
+    _set_state("flashing", "Enabling radio USB...")
+    _append_log("Enabling radio USB relay...")
+    _set_usb_relay(True)
+    _append_log("Radio USB enabled.")
 
     # Wait for the DFU serial port to re-appear after USB re-enumeration
     port = models.get_setting("flash_serial_port", config.FLASH_SERIAL_PORT)
@@ -219,6 +239,11 @@ def _restart_services(poller):
                 _append_log(f"{svc} started.")
         except Exception as e:
             _append_log(f"Warning starting {svc}: {e}")
+
+    # Disable USB relay now that flash is complete
+    _append_log("Disabling radio USB relay...")
+    _set_usb_relay(False)
+    _append_log("Radio USB disabled.")
 
     _append_log("Restarting collector poller...")
     try:
