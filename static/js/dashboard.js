@@ -659,8 +659,6 @@
         var statusEl = document.getElementById('usb-relay-status');
         var deviceList = document.getElementById('usb-device-list');
         var usbEnabled = false;
-        var devicePollTimer = null;
-        var devicePollCount = 0;
 
         function updateBtn(enabled) {
             usbEnabled = enabled;
@@ -668,55 +666,32 @@
             btn.classList.toggle('active-toggle', enabled);
         }
 
-        function renderDevices(devices) {
-            if (!devices || !devices.length) {
-                deviceList.style.display = 'none';
-                deviceList.innerHTML = '';
-                return;
-            }
+        function showDevice(device) {
             deviceList.style.display = '';
-            deviceList.innerHTML = devices.map(function (d) {
-                return '<div class="usb-device-item">'
-                    + '<span class="usb-device-name">' + d.name + '</span>'
-                    + '<span class="usb-device-path">' + d.path + '</span>'
+            if (device) {
+                deviceList.innerHTML =
+                    '<div class="usb-device-item">'
+                    + '<span class="usb-device-name">' + device.name + '</span>'
+                    + '<span class="usb-device-path">' + device.path + '</span>'
                     + '</div>';
-            }).join('');
-        }
-
-        function refreshUsbStatus() {
-            return fetchJSON('/api/v1/radio/usb').then(function (d) {
-                updateBtn(d.enabled);
-                renderDevices(d.devices);
-                return d;
-            });
-        }
-
-        function startDevicePoll() {
-            stopDevicePoll();
-            devicePollCount = 0;
-            devicePollTimer = setInterval(function () {
-                devicePollCount++;
-                fetchJSON('/api/v1/radio/usb').then(function (d) {
-                    renderDevices(d.devices);
-                    // Stop polling once we find devices or after 5 attempts
-                    if ((d.devices && d.devices.length) || devicePollCount >= 5) {
-                        stopDevicePoll();
-                    }
-                }).catch(function () {
-                    stopDevicePoll();
-                });
-            }, 2000);
-        }
-
-        function stopDevicePoll() {
-            if (devicePollTimer) {
-                clearInterval(devicePollTimer);
-                devicePollTimer = null;
+            } else {
+                deviceList.innerHTML =
+                    '<div class="usb-device-item usb-device-none">'
+                    + 'No device detected'
+                    + '</div>';
             }
+        }
+
+        function hideDevice() {
+            deviceList.style.display = 'none';
+            deviceList.innerHTML = '';
         }
 
         // Get initial state
-        refreshUsbStatus().catch(noop);
+        fetchJSON('/api/v1/radio/usb').then(function (d) {
+            updateBtn(d.enabled);
+            if (!d.enabled) hideDevice();
+        }).catch(noop);
 
         btn.addEventListener('click', function () {
             var newState = !usbEnabled;
@@ -733,22 +708,17 @@
                 btn.disabled = false;
                 if (resp.ok) {
                     updateBtn(newState);
-                    statusEl.textContent = newState ? 'Enabled' : 'Disabled';
-                    statusEl.className = 'settings-save-status success';
                     if (newState) {
-                        // Poll for USB device to appear after enumeration
-                        renderDevices([]);
-                        startDevicePoll();
+                        showDevice(resp.data.device);
                     } else {
-                        stopDevicePoll();
-                        renderDevices([]);
+                        hideDevice();
                     }
                 } else {
                     updateBtn(usbEnabled);
                     statusEl.textContent = resp.data.error || 'Failed';
                     statusEl.className = 'settings-save-status error';
+                    setTimeout(function () { statusEl.textContent = ''; }, 3000);
                 }
-                setTimeout(function () { statusEl.textContent = ''; }, 3000);
             })
             .catch(function () {
                 btn.disabled = false;

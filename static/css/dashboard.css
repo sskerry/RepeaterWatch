@@ -722,6 +722,12 @@ td.dir-rx { color: var(--green); }
     color: var(--text-muted);
 }
 
+.usb-device-none {
+    color: var(--text-muted);
+    font-size: 0.8rem;
+    font-style: italic;
+}
+
 .bootloader-btn:hover:not(:disabled) {
     background: rgba(230, 81, 0, 0.1);
     border-color: #e65100;

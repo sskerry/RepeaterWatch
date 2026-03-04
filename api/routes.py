@@ -524,16 +524,18 @@ def radio_bootloader():
     return jsonify({"status": "ok"})
 
 
-def _detect_usb_serial_devices():
-    """List symlinks in /dev/serial/by-id/."""
+def _list_serial_by_id():
+    """Return the set of symlink names in /dev/serial/by-id/."""
     by_id = "/dev/serial/by-id"
     if not os.path.isdir(by_id):
-        return []
-    devices = []
-    for name in sorted(os.listdir(by_id)):
-        target = os.path.realpath(os.path.join(by_id, name))
-        devices.append({"name": name, "path": target})
-    return devices
+        return set()
+    return set(os.listdir(by_id))
+
+
+def _device_info(name):
+    """Return dict with symlink name and resolved path."""
+    path = os.path.realpath(os.path.join("/dev/serial/by-id", name))
+    return {"name": name, "path": path}
 
 
 @api.route("/radio/usb")
@@ -544,15 +546,11 @@ def radio_usb_status():
             ["pinctrl", "get", str(pin)],
             capture_output=True, text=True, timeout=5,
         )
-        # pinctrl get output contains "hi" or "lo" for the current level
         output = result.stdout.strip().lower()
         enabled = "hi" in output
-        return jsonify({
-            "enabled": enabled,
-            "devices": _detect_usb_serial_devices(),
-        })
+        return jsonify({"enabled": enabled})
     except Exception as e:
-        return jsonify({"enabled": False, "devices": [], "error": str(e)})
+        return jsonify({"enabled": False, "error": str(e)})
 
 
 @api.route("/radio/usb", methods=["POST"])
@@ -561,11 +559,26 @@ def radio_usb_toggle():
     enable = data.get("enabled", True)
     pin = config.USB_RELAY_GPIO_PIN
     level = "dh" if enable else "dl"
+
+    before = _list_serial_by_id()
+
     try:
         subprocess.run(
             ["pinctrl", "set", str(pin), "op", level],
             capture_output=True, text=True, timeout=5, check=True,
         )
-        return jsonify({"status": "ok", "enabled": enable})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+    # Wait for USB enumeration and detect new device
+    device = None
+    if enable:
+        for _ in range(6):
+            time.sleep(1)
+            after = _list_serial_by_id()
+            new = after - before
+            if new:
+                device = _device_info(next(iter(new)))
+                break
+
+    return jsonify({"status": "ok", "enabled": enable, "device": device})
