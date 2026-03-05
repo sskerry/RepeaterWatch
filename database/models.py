@@ -399,12 +399,17 @@ def insert_disk_io(ts: int, device: str, read_bytes: int, write_bytes: int):
     _conn().commit()
 
 
+DISK_IO_DEVICES = ("mmcblk0", "sda")
+
+
 def query_disk_io(hours: int = 24) -> dict:
     """Return per-device disk IO rates as {device: {timestamps, read_kbs, write_kbs}}."""
+    placeholders = ",".join("?" for _ in DISK_IO_DEVICES)
     rows = _conn().execute(
         "SELECT ts, device, read_bytes, write_bytes "
-        "FROM stats_disk_io WHERE ts >= ? ORDER BY device, ts",
-        (_since(hours),),
+        f"FROM stats_disk_io WHERE ts >= ? AND device IN ({placeholders}) "
+        "ORDER BY device, ts",
+        (_since(hours), *DISK_IO_DEVICES),
     ).fetchall()
 
     # Group rows by device
