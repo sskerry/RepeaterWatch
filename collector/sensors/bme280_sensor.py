@@ -10,6 +10,7 @@ try:
     HAS_BME280 = True
 except ImportError:
     HAS_BME280 = False
+    logger.info("BME280: adafruit_bme280 or board library not available")
 
 
 def read() -> dict | None:

@@ -38,6 +38,27 @@ class SensorPoller:
         self._stop_event.clear()
         self._as3935.init()
         self._sensor_status["as3935"]["ok"] = self._as3935.available
+
+        # Log sensor library availability at startup
+        self._sensor_status["ina3221"]["ok"] = ina3221_sensor.HAS_INA3221
+        self._sensor_status["bme280"]["ok"] = bme280_sensor.HAS_BME280
+        self._sensor_status["lis2dw12"]["ok"] = lis2dw12_sensor.HAS_LIS2DW12
+
+        available = []
+        missing = []
+        for name, mod in [("ina3221", ina3221_sensor), ("bme280", bme280_sensor),
+                          ("lis2dw12", lis2dw12_sensor)]:
+            flag = getattr(mod, "HAS_" + name.upper(), False)
+            (available if flag else missing).append(name)
+        if self._as3935.available:
+            available.append("as3935")
+        else:
+            missing.append("as3935")
+
+        logger.info("SensorPoller starting — available: [%s], missing: [%s]",
+                     ", ".join(available) or "none",
+                     ", ".join(missing) or "none")
+
         self._thread = threading.Thread(target=self._run, daemon=True, name="sensor-poller")
         self._thread.start()
 
@@ -83,6 +104,7 @@ class SensorPoller:
 
             # 5-minute boundary reached — aggregate and store
             ts = models.aligned_ts()
+            logger.info("Sensor poll cycle at ts=%d (accel samples=%d)", ts, len(accel_buf))
 
             # INA3221
             try:

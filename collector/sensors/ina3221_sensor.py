@@ -10,6 +10,7 @@ try:
     HAS_INA3221 = True
 except ImportError:
     HAS_INA3221 = False
+    logger.info("INA3221: adafruit_ina3221 or board library not available")
 
 
 def read() -> dict | None:

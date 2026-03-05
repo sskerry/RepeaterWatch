@@ -11,6 +11,7 @@ try:
     HAS_LIS2DW12 = True
 except ImportError:
     HAS_LIS2DW12 = False
+    logger.info("LIS2DW12: adafruit_lis2dw12 or board library not available")
 
 
 def read() -> dict | None:
