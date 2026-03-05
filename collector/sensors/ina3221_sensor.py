@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import time
 
 logger = logging.getLogger(__name__)
 
@@ -12,6 +13,19 @@ except ImportError:
     HAS_INA3221 = False
     logger.info("INA3221: adafruit_ina3221 or board library not available")
 
+# Persistent instance — INA3221 needs settling time after init
+_ina = None
+
+
+def _get_ina():
+    global _ina
+    if _ina is None:
+        i2c = board.I2C()
+        _ina = adafruit_ina3221.INA3221(i2c, address=0x40, enable=[0, 1, 2])
+        time.sleep(1)  # Allow first conversion cycle to complete
+        logger.info("INA3221 initialized at 0x40, all channels enabled")
+    return _ina
+
 
 def read() -> dict | None:
     """Read INA3221 at 0x40. Returns ch0 (battery) and ch1 (load) data."""
@@ -20,26 +34,11 @@ def read() -> dict | None:
 
     for attempt in range(3):
         try:
-            i2c = board.I2C()
-            ina = adafruit_ina3221.INA3221(i2c, address=0x40, enable=[0, 1, 2])
-            # Explicitly ensure ch1 is enabled
-            ina[1].enable(True)
+            ina = _get_ina()
             ch0_v = ina[0].bus_voltage
             ch0_i = ina[0].current
-            ch0_sv = ina[0].shunt_voltage
             ch1_v = ina[1].bus_voltage
             ch1_i = ina[1].current
-            ch1_sv = ina[1].shunt_voltage
-            ch2_v = ina[2].bus_voltage
-            ch2_i = ina[2].current
-            ch2_sv = ina[2].shunt_voltage
-            if attempt == 0:
-                logger.info("INA3221 raw: ch0 bus=%.4fV shunt=%.4fmV i=%.2fmA | "
-                            "ch1 bus=%.4fV shunt=%.4fmV i=%.2fmA | "
-                            "ch2 bus=%.4fV shunt=%.4fmV i=%.2fmA",
-                             ch0_v, ch0_sv, ch0_i,
-                             ch1_v, ch1_sv, ch1_i,
-                             ch2_v, ch2_sv, ch2_i)
             return {
                 "ch0_voltage": round(ch0_v, 4),
                 "ch0_current": round(ch0_i, 2),
@@ -49,6 +48,7 @@ def read() -> dict | None:
                 "ch1_power": round(ch1_v * ch1_i, 2),
             }
         except Exception:
+            _ina = None  # Reset on error so next attempt reinitializes
             if attempt == 2:
                 logger.exception("INA3221 read failed after 3 attempts")
     return None
