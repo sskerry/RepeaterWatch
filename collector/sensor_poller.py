@@ -76,8 +76,9 @@ class SensorPoller:
             logger.exception("SensorPoller thread crashed")
 
     def _run_loop(self):
-        # Accumulation buffers for accelerometer readings within a 5-min window
+        # Accumulation buffers for readings within a 5-min window
         accel_buf: list[dict] = []
+        power_buf: list[dict] = []
 
         while not self._stop_event.is_set():
             current_ts = models.aligned_ts()
@@ -85,11 +86,20 @@ class SensorPoller:
             wait_secs = next_boundary - time.time()
             logger.info("Waiting %.0fs for next 5-min boundary (ts=%d)", wait_secs, next_boundary)
 
-            # Inner loop: poll accelerometer every 5s until next 5-min boundary
+            # Inner loop: poll sensors every 5s until next 5-min boundary
             while not self._stop_event.is_set():
                 now = time.time()
                 if now >= next_boundary:
                     break
+
+                # Poll INA3221
+                try:
+                    reading = ina3221_sensor.read()
+                    if reading is not None:
+                        power_buf.append(reading)
+                        self._sensor_status["ina3221"]["ok"] = True
+                except Exception as e:
+                    self._sensor_status["ina3221"]["last_error"] = str(e)
 
                 # Poll accelerometer
                 try:
@@ -103,7 +113,7 @@ class SensorPoller:
                 # Drain and store AS3935 events immediately
                 self._store_lightning_events()
 
-                # Wait for next accel poll or boundary
+                # Wait for next poll or boundary
                 wait = min(ACCEL_POLL_SECS, next_boundary - time.time())
                 if wait > 0:
                     self._stop_event.wait(wait)
@@ -113,32 +123,35 @@ class SensorPoller:
 
             # 5-minute boundary reached — aggregate and store
             ts = models.aligned_ts()
-            logger.info("Sensor poll cycle at ts=%d (accel samples=%d)", ts, len(accel_buf))
+            logger.info("Sensor poll cycle at ts=%d (power samples=%d, accel samples=%d)",
+                        ts, len(power_buf), len(accel_buf))
 
-            # INA3221
-            try:
-                data = ina3221_sensor.read()
-                if data is not None:
+            # INA3221 — average over window
+            if power_buf:
+                try:
+                    n = len(power_buf)
+                    ch0_v = sum(r["ch0_voltage"] for r in power_buf) / n
+                    ch0_i = sum(r["ch0_current"] for r in power_buf) / n
+                    ch1_v = sum(r["ch1_voltage"] for r in power_buf) / n
+                    ch1_i = sum(r["ch1_current"] for r in power_buf) / n
                     models.insert_sensor_power(
                         ts,
-                        ch0_v=data["ch0_voltage"],
-                        ch0_i=data["ch0_current"],
-                        ch0_p=data["ch0_power"],
-                        ch1_v=data["ch1_voltage"],
-                        ch1_i=data["ch1_current"],
-                        ch1_p=data["ch1_power"],
+                        ch0_v=round(ch0_v, 4),
+                        ch0_i=round(ch0_i, 2),
+                        ch0_p=round(ch0_v * ch0_i, 2),
+                        ch1_v=round(ch1_v, 4),
+                        ch1_i=round(ch1_i, 2),
+                        ch1_p=round(ch1_v * ch1_i, 2),
                     )
-                    self._sensor_status["ina3221"]["ok"] = True
-                    logger.info("INA3221: ch0=%.3fV/%.1fmA ch1=%.3fV/%.1fmA",
-                                data["ch0_voltage"], data["ch0_current"],
-                                data["ch1_voltage"], data["ch1_current"])
-                else:
-                    self._sensor_status["ina3221"]["ok"] = False
-            except Exception as e:
-                self._sensor_status["ina3221"]["last_error"] = str(e)
-                logger.exception("INA3221 poll error")
+                    logger.info("INA3221: %d samples, ch0=%.3fV/%.1fmA ch1=%.3fV/%.1fmA",
+                                n, ch0_v, ch0_i, ch1_v, ch1_i)
+                except Exception:
+                    logger.exception("INA3221 aggregation error")
+                power_buf = []
+            else:
+                self._sensor_status["ina3221"]["ok"] = False
 
-            # BME280
+            # BME280 — latest reading
             try:
                 data = bme280_sensor.read()
                 if data is not None:
