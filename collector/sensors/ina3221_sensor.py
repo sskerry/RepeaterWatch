@@ -22,13 +22,17 @@ def read() -> dict | None:
         try:
             i2c = board.I2C()
             ina = adafruit_ina3221.INA3221(i2c, address=0x40)
+            ch0_v = ina[0].bus_voltage
+            ch0_i = ina[0].current
+            ch1_v = ina[1].bus_voltage
+            ch1_i = ina[1].current
             return {
-                "ch0_voltage": round(ina.bus_voltage(0), 4),
-                "ch0_current": round(ina.current(0), 2),
-                "ch0_power": round(ina.bus_voltage(0) * ina.current(0), 2),
-                "ch1_voltage": round(ina.bus_voltage(1), 4),
-                "ch1_current": round(ina.current(1), 2),
-                "ch1_power": round(ina.bus_voltage(1) * ina.current(1), 2),
+                "ch0_voltage": round(ch0_v, 4),
+                "ch0_current": round(ch0_i, 2),
+                "ch0_power": round(ch0_v * ch0_i, 2),
+                "ch1_voltage": round(ch1_v, 4),
+                "ch1_current": round(ch1_i, 2),
+                "ch1_power": round(ch1_v * ch1_i, 2),
             }
         except Exception:
             if attempt == 2:
