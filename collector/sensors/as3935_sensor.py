@@ -13,10 +13,17 @@ except ImportError:
     HAS_SMBUS = False
 
 try:
-    import RPi.GPIO as GPIO
+    import lgpio
+    _GPIO_LIB = "lgpio"
     HAS_GPIO = True
 except ImportError:
-    HAS_GPIO = False
+    try:
+        import RPi.GPIO as _rpigpio
+        _GPIO_LIB = "rpigpio"
+        HAS_GPIO = True
+    except ImportError:
+        _GPIO_LIB = None
+        HAS_GPIO = False
 
 # AS3935 registers (from DFRobot_AS3935_Lib)
 _REG_CONFIG0 = 0x00
@@ -48,6 +55,8 @@ class AS3935:
     def __init__(self, irq_gpio: int = 18):
         self._irq_gpio = irq_gpio
         self._bus: smbus2.SMBus | None = None
+        self._gpio_handle = None  # lgpio chip handle
+        self._lgpio_cb = None     # lgpio callback handle
         self._events: list[dict] = []
         self._lock = threading.Lock()
         self._available = False
@@ -75,8 +84,8 @@ class AS3935:
             self._configure()
             self._setup_irq()
             self._available = True
-            logger.info("AS3935 initialized — GPIO%d, cap=%dpF, outdoors",
-                        self._irq_gpio, CAPACITANCE)
+            logger.info("AS3935 initialized — GPIO%d, cap=%dpF, outdoors, gpio_lib=%s",
+                        self._irq_gpio, CAPACITANCE, _GPIO_LIB)
             return True
         except Exception:
             logger.exception("AS3935 init failed")
@@ -141,12 +150,24 @@ class AS3935:
         self._sing_reg_write(_REG_TUNE_CAP, 0x40, 0x00)
 
     def _setup_irq(self):
-        GPIO.setmode(GPIO.BCM)
-        GPIO.setup(self._irq_gpio, GPIO.IN)
-        GPIO.add_event_detect(
-            self._irq_gpio, GPIO.RISING,
-            callback=self._irq_handler, bouncetime=50,
-        )
+        if _GPIO_LIB == "lgpio":
+            h = lgpio.gpiochip_open(0)
+            lgpio.gpio_claim_alert(h, self._irq_gpio, lgpio.RISING_EDGE)
+            cb = lgpio.callback(h, self._irq_gpio, lgpio.RISING_EDGE,
+                                self._lgpio_callback)
+            self._gpio_handle = h
+            self._lgpio_cb = cb
+        else:
+            _rpigpio.setmode(_rpigpio.BCM)
+            _rpigpio.setup(self._irq_gpio, _rpigpio.IN)
+            _rpigpio.add_event_detect(
+                self._irq_gpio, _rpigpio.RISING,
+                callback=self._irq_handler, bouncetime=50,
+            )
+
+    def _lgpio_callback(self, chip, gpio, level, timestamp):
+        """lgpio callback — delegates to shared IRQ handler."""
+        self._irq_handler(gpio)
 
     def _irq_handler(self, channel):
         # DFRobot example waits 5ms for interrupt register to populate
@@ -197,7 +218,13 @@ class AS3935:
     def cleanup(self):
         if HAS_GPIO and self._available:
             try:
-                GPIO.remove_event_detect(self._irq_gpio)
+                if _GPIO_LIB == "lgpio":
+                    if self._lgpio_cb is not None:
+                        self._lgpio_cb.cancel()
+                    if self._gpio_handle is not None:
+                        lgpio.gpiochip_close(self._gpio_handle)
+                else:
+                    _rpigpio.remove_event_detect(self._irq_gpio)
             except Exception:
                 pass
         if self._bus:
