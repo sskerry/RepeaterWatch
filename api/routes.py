@@ -237,11 +237,19 @@ def stats_pi_health():
 
 @api.route("/stats/pi/disk-io")
 def stats_pi_disk_io():
+    devices = models.query_disk_io(_hours())
+    if devices:
+        return jsonify({"devices": devices})
+    # Fallback to aggregate data from pi_health table
     rows = models.query_pi_disk_io(_hours())
     return jsonify({
-        "timestamps": [r["ts"] for r in rows],
-        "read_kbs":   [r["read_kbs"] for r in rows],
-        "write_kbs":  [r["write_kbs"] for r in rows],
+        "devices": {
+            "all": {
+                "timestamps": [r["ts"] for r in rows],
+                "read_kbs":   [r["read_kbs"] for r in rows],
+                "write_kbs":  [r["write_kbs"] for r in rows],
+            }
+        }
     })
 
 

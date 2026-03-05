@@ -210,6 +210,14 @@ class StatsPoller:
                 uptime_secs=uptime,
                 process_count=proc_count,
             )
+
+            # Per-device disk IO
+            perdisk = psutil.disk_io_counters(perdisk=True)
+            if perdisk:
+                for dev, counters in perdisk.items():
+                    models.insert_disk_io(
+                        ts, dev, counters.read_bytes, counters.write_bytes
+                    )
         except Exception:
             logger.exception("Error collecting Pi health metrics")
 

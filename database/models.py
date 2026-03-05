@@ -390,6 +390,53 @@ def query_pi_disk_io(hours: int = 24) -> list[dict]:
     return result
 
 
+def insert_disk_io(ts: int, device: str, read_bytes: int, write_bytes: int):
+    _conn().execute(
+        "INSERT OR REPLACE INTO stats_disk_io "
+        "(ts, device, read_bytes, write_bytes) VALUES (?, ?, ?, ?)",
+        (ts, device, read_bytes, write_bytes),
+    )
+    _conn().commit()
+
+
+def query_disk_io(hours: int = 24) -> dict:
+    """Return per-device disk IO rates as {device: {timestamps, read_kbs, write_kbs}}."""
+    rows = _conn().execute(
+        "SELECT ts, device, read_bytes, write_bytes "
+        "FROM stats_disk_io WHERE ts >= ? ORDER BY device, ts",
+        (_since(hours),),
+    ).fetchall()
+
+    # Group rows by device
+    by_device: dict[str, list] = {}
+    for r in rows:
+        d = dict(r)
+        by_device.setdefault(d["device"], []).append(d)
+
+    result = {}
+    for device, dev_rows in by_device.items():
+        timestamps = []
+        read_kbs = []
+        write_kbs = []
+        prev = None
+        for row in dev_rows:
+            if prev is not None:
+                dt = row["ts"] - prev["ts"]
+                if dt > 0:
+                    rd = (row["read_bytes"] or 0) - (prev["read_bytes"] or 0)
+                    wd = (row["write_bytes"] or 0) - (prev["write_bytes"] or 0)
+                    timestamps.append(row["ts"])
+                    read_kbs.append(round(max(0, rd) / dt / 1024, 2))
+                    write_kbs.append(round(max(0, wd) / dt / 1024, 2))
+            prev = row
+        result[device] = {
+            "timestamps": timestamps,
+            "read_kbs": read_kbs,
+            "write_kbs": write_kbs,
+        }
+    return result
+
+
 def query_pi_network_io(hours: int = 24) -> list[dict]:
     rows = _conn().execute(
         "SELECT ts, net_bytes_sent, net_bytes_recv "

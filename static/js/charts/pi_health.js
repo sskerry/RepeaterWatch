@@ -188,13 +188,20 @@ var PiDiskIoChart = (function () {
     var TT = { trigger: 'axis', backgroundColor: 'rgba(30,30,50,0.95)', borderColor: '#555', textStyle: { color: '#e0e0e0' }, valueFormatter: function (v) { return v != null ? v + ' KB/s' : '--'; } };
     var AX = { axisLine: { lineStyle: { color: '#888' } }, splitLine: { lineStyle: { color: 'rgba(255,255,255,0.08)' } } };
 
+    // Color palette: each device gets a pair (read, write)
+    var DEVICE_COLORS = [
+        { read: '#06d6a0', write: '#ef476f' },
+        { read: '#00b4d8', write: '#ffd166' },
+        { read: '#8338ec', write: '#ff6b6b' },
+        { read: '#3a86a7', write: '#fb5607' },
+    ];
+
     function init(el) {
         chart = echarts.init(el);
         chart.setOption({
             backgroundColor: 'transparent',
             tooltip: TT,
             legend: {
-                data: ['Read', 'Write'],
                 textStyle: { fontSize: 11, color: '#aaa' },
                 top: 0,
             },
@@ -204,23 +211,37 @@ var PiDiskIoChart = (function () {
                 { type: 'inside', xAxisIndex: 0 },
                 { type: 'slider', xAxisIndex: 0, height: 20, bottom: 5 },
             ],
-            series: [
-                { name: 'Read', type: 'line', smooth: true, symbol: 'none', lineStyle: { width: 2, color: '#06d6a0' }, itemStyle: { color: '#06d6a0' }, data: [] },
-                { name: 'Write', type: 'line', smooth: true, symbol: 'none', lineStyle: { width: 2, color: '#ef476f' }, itemStyle: { color: '#ef476f' }, data: [] },
-            ],
+            series: [],
             grid: { left: 50, right: 16, top: 30, bottom: 50 },
         });
     }
 
     function update(data) {
-        if (!chart || !data.timestamps.length) return;
-        var rd = [], wr = [];
-        for (var i = 0; i < data.timestamps.length; i++) {
-            var t = data.timestamps[i] * 1000;
-            rd.push([t, data.read_kbs[i]]);
-            wr.push([t, data.write_kbs[i]]);
+        if (!chart) return;
+        var devices = data.devices || {};
+        var deviceNames = Object.keys(devices).sort();
+        if (!deviceNames.length) return;
+
+        var series = [];
+        var legendData = [];
+        for (var di = 0; di < deviceNames.length; di++) {
+            var dev = deviceNames[di];
+            var devData = devices[dev];
+            var colors = DEVICE_COLORS[di % DEVICE_COLORS.length];
+            var readName = dev + ' Read';
+            var writeName = dev + ' Write';
+            legendData.push(readName, writeName);
+
+            var rd = [], wr = [];
+            for (var i = 0; i < devData.timestamps.length; i++) {
+                var t = devData.timestamps[i] * 1000;
+                rd.push([t, devData.read_kbs[i]]);
+                wr.push([t, devData.write_kbs[i]]);
+            }
+            series.push({ name: readName, type: 'line', smooth: true, symbol: 'none', lineStyle: { width: 2, color: colors.read }, itemStyle: { color: colors.read }, data: rd });
+            series.push({ name: writeName, type: 'line', smooth: true, symbol: 'none', lineStyle: { width: 2, color: colors.write }, itemStyle: { color: colors.write }, data: wr });
         }
-        chart.setOption({ series: [{ data: rd }, { data: wr }] });
+        chart.setOption({ legend: { data: legendData }, series: series }, { replaceMerge: ['series'] });
     }
 
     return { init: init, update: update, resize: function () { if (chart) chart.resize(); } };

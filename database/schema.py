@@ -138,9 +138,18 @@ CREATE TABLE IF NOT EXISTS sensor_lightning_events (
     energy      REAL
 );
 
+CREATE TABLE IF NOT EXISTS stats_disk_io (
+    ts INTEGER NOT NULL,
+    device TEXT NOT NULL,
+    read_bytes INTEGER,
+    write_bytes INTEGER,
+    PRIMARY KEY (ts, device)
+);
+
 CREATE INDEX IF NOT EXISTS idx_packet_log_ts ON packet_log(ts);
 CREATE INDEX IF NOT EXISTS idx_neighbor_sightings_ts ON neighbor_sightings(ts);
 CREATE INDEX IF NOT EXISTS idx_lightning_events_ts ON sensor_lightning_events(ts);
+CREATE INDEX IF NOT EXISTS idx_disk_io_ts ON stats_disk_io(ts);
 """
 
 
