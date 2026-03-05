@@ -21,7 +21,7 @@ def read() -> dict | None:
     for attempt in range(3):
         try:
             i2c = board.I2C()
-            ina = adafruit_ina3221.INA3221(i2c, address=0x40)
+            ina = adafruit_ina3221.INA3221(i2c, address=0x40, enable=[0, 1])
             ch0_v = ina[0].bus_voltage
             ch0_i = ina[0].current
             ch1_v = ina[1].bus_voltage
