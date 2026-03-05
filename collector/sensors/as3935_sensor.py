@@ -18,31 +18,36 @@ try:
 except ImportError:
     HAS_GPIO = False
 
-# AS3935 registers
-_REG_CONFIG0 = 0x00  # AFE_GB, power down
-_REG_CONFIG1 = 0x01  # Noise floor level, watchdog threshold
-_REG_CONFIG2 = 0x02  # Spike rejection, min lightning
-_REG_CONFIG3 = 0x03  # Interrupt register, disturbers mask, LCO_FDIV
-_REG_DISTANCE = 0x07  # Distance estimation
-_REG_INT_ENERGY0 = 0x04
-_REG_INT_ENERGY1 = 0x05
-_REG_INT_ENERGY2 = 0x06
-_REG_TUNE_CAP = 0x08  # Tuning capacitor
-_REG_CALIB = 0x3D  # Calibration
+# AS3935 registers (from DFRobot_AS3935_Lib)
+_REG_CONFIG0 = 0x00
+_REG_CONFIG1 = 0x01
+_REG_CONFIG2 = 0x02
+_REG_CONFIG3 = 0x03
+_REG_ENERGY0 = 0x04
+_REG_ENERGY1 = 0x05
+_REG_ENERGY2 = 0x06
+_REG_DISTANCE = 0x07
+_REG_TUNE_CAP = 0x08
+_REG_CALIB = 0x3D
 
-# Interrupt types
+# Interrupt sources (from register 0x03 bits [3:0])
 INT_NOISE = 0x01
 INT_DISTURBER = 0x04
 INT_LIGHTNING = 0x08
 
-I2C_ADDR = 0x03
+I2C_ADDR = 0x03  # Reserved address — requires force=True with smbus2
 I2C_BUS = 1
+
+# DFRobot defaults
+CAPACITANCE = 96
+OUTDOORS_AFE = 0x0E
+INDOORS_AFE = 0x12
 
 
 class AS3935:
     def __init__(self, irq_gpio: int = 18):
         self._irq_gpio = irq_gpio
-        self._bus = None
+        self._bus: smbus2.SMBus | None = None
         self._events: list[dict] = []
         self._lock = threading.Lock()
         self._available = False
@@ -53,55 +58,87 @@ class AS3935:
 
     def init(self) -> bool:
         if not HAS_SMBUS or not HAS_GPIO:
-            logger.info("AS3935: smbus2 or RPi.GPIO not available")
+            logger.info("AS3935: smbus2=%s RPi.GPIO=%s", HAS_SMBUS, HAS_GPIO)
             return False
 
         try:
             self._bus = smbus2.SMBus(I2C_BUS)
-            # Test read
-            self._bus.read_byte_data(I2C_ADDR, 0x00)
+            # Test read — force=True required for reserved address 0x03
+            val = self._bus.read_byte_data(I2C_ADDR, _REG_CONFIG0, force=True)
+            logger.info("AS3935 found at 0x%02X (reg0=0x%02X)", I2C_ADDR, val)
         except Exception:
-            logger.warning("AS3935 not found on I2C bus")
+            logger.warning("AS3935 not found at 0x%02X on I2C bus %d", I2C_ADDR, I2C_BUS)
             return False
 
         try:
+            self._reset()
             self._configure()
             self._setup_irq()
             self._available = True
-            logger.info("AS3935 initialized on GPIO%d", self._irq_gpio)
+            logger.info("AS3935 initialized — GPIO%d, cap=%dpF, outdoors",
+                        self._irq_gpio, CAPACITANCE)
             return True
         except Exception:
             logger.exception("AS3935 init failed")
             return False
 
     def _write_reg(self, reg: int, value: int):
-        self._bus.write_byte_data(I2C_ADDR, reg, value)
+        self._bus.write_byte_data(I2C_ADDR, reg, value, force=True)
 
     def _read_reg(self, reg: int) -> int:
-        return self._bus.read_byte_data(I2C_ADDR, reg)
+        return self._bus.read_byte_data(I2C_ADDR, reg, force=True)
+
+    def _sing_reg_write(self, reg: int, mask: int, data: int):
+        """Read-modify-write a register (DFRobot pattern)."""
+        old = self._read_reg(reg)
+        new = (old & ~mask) | data
+        self._write_reg(reg, new)
+
+    def _reset(self):
+        """Send direct command to reset all registers to defaults."""
+        err = self._write_reg(0x3C, 0x96)
+        time.sleep(0.002)
+        # Verify reset by reading reg0 — default value has PWD=0
+        val = self._read_reg(_REG_CONFIG0)
+        logger.debug("AS3935 reset — reg0=0x%02X", val)
 
     def _configure(self):
-        # Power up, OUTDOORS mode (AFE_GB = 0x0E)
-        self._write_reg(_REG_CONFIG0, 0x24 | 0x0E)
+        """Configure following DFRobot detailed example sequence."""
+        # Power up (clear PWD bit 0 in reg0)
+        self._sing_reg_write(_REG_CONFIG0, 0x01, 0x00)
         time.sleep(0.002)
 
-        # Noise floor level 4, watchdog threshold 2
-        self._write_reg(_REG_CONFIG1, (4 << 4) | 2)
+        # Set outdoors mode (AFE_GB bits [5:1] in reg0)
+        self._sing_reg_write(_REG_CONFIG0, 0x3E, OUTDOORS_AFE << 1)
 
-        # Spike rejection 2, min lightning 0 (1 strike)
-        self._write_reg(_REG_CONFIG2, 2)
+        # Enable disturber reporting (clear MASK_DIST bit 5 in reg3)
+        self._sing_reg_write(_REG_CONFIG3, 0x20, 0x00)
 
-        # Enable disturber reporting (bit 5 = 0 = enabled)
-        reg3 = self._read_reg(_REG_CONFIG3)
-        reg3 &= ~(1 << 5)  # clear MASK_DIST
-        self._write_reg(_REG_CONFIG3, reg3)
+        # Clear IRQ output source (bits [7:6] in reg3)
+        self._sing_reg_write(_REG_CONFIG3, 0xC0, 0x00)
+        time.sleep(0.5)
 
-        # Tuning capacitor = 96pF (value 6 = 6*8pF = 48pF... use 12 = 96pF)
-        self._write_reg(_REG_TUNE_CAP, 12)
+        # Set tuning capacitor — value is cap_pF / 8
+        cap_val = CAPACITANCE // 8
+        self._sing_reg_write(_REG_TUNE_CAP, 0x0F, cap_val)
 
-        # Calibrate
+        # Noise floor level 2 (bits [6:4] in reg1)
+        self._sing_reg_write(_REG_CONFIG1, 0x70, 2 << 4)
+
+        # Watchdog threshold 2 (bits [3:0] in reg1)
+        self._sing_reg_write(_REG_CONFIG1, 0x0F, 2)
+
+        # Spike rejection 2 (bits [3:0] in reg2)
+        self._sing_reg_write(_REG_CONFIG2, 0x0F, 2)
+
+        # Calibrate RCO
         self._write_reg(_REG_CALIB, 0x96)
         time.sleep(0.002)
+        # Set SRCO display on IRQ
+        self._sing_reg_write(_REG_TUNE_CAP, 0x40, 0x40)
+        time.sleep(0.002)
+        # Clear SRCO display
+        self._sing_reg_write(_REG_TUNE_CAP, 0x40, 0x00)
 
     def _setup_irq(self):
         GPIO.setmode(GPIO.BCM)
@@ -112,7 +149,8 @@ class AS3935:
         )
 
     def _irq_handler(self, channel):
-        time.sleep(0.003)  # Wait for interrupt register to populate
+        # DFRobot example waits 5ms for interrupt register to populate
+        time.sleep(0.005)
         try:
             int_src = self._read_reg(_REG_CONFIG3) & 0x0F
 
@@ -128,9 +166,9 @@ class AS3935:
                 distance = self._read_reg(_REG_DISTANCE) & 0x3F
                 event["distance_km"] = distance if distance != 0x3F else None
 
-                e0 = self._read_reg(_REG_INT_ENERGY0)
-                e1 = self._read_reg(_REG_INT_ENERGY1)
-                e2 = self._read_reg(_REG_INT_ENERGY2) & 0x1F
+                e0 = self._read_reg(_REG_ENERGY0)
+                e1 = self._read_reg(_REG_ENERGY1)
+                e2 = self._read_reg(_REG_ENERGY2) & 0x1F
                 event["energy"] = (e2 << 16) | (e1 << 8) | e0
 
                 logger.info("Lightning detected: distance=%s km, energy=%s",
