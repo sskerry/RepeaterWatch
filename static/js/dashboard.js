@@ -1260,6 +1260,41 @@
                 setTimeout(function () { fwStatusEl.textContent = ''; }, 3000);
             });
         });
+
+        // Database reset handler
+        var dbResetBtn = document.getElementById('db-reset-btn');
+        var dbStatusEl = document.getElementById('db-reset-status');
+
+        dbResetBtn.addEventListener('click', function () {
+            if (!confirm('Delete ALL collected data? This cannot be undone. Settings will be preserved.')) return;
+
+            dbResetBtn.disabled = true;
+            dbStatusEl.textContent = 'Deleting...';
+            dbStatusEl.className = 'settings-save-status';
+
+            fetch('/api/v1/database/reset', { method: 'POST' })
+            .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, data: d }; }); })
+            .then(function (resp) {
+                dbResetBtn.disabled = false;
+                if (resp.ok) {
+                    dbStatusEl.textContent = 'Done — all data deleted';
+                    dbStatusEl.className = 'settings-save-status success';
+                    fetchJSON('/api/v1/status').then(function (d) {
+                        document.getElementById('footer-db-size').textContent = formatBytes(d.db_size_bytes);
+                    }).catch(noop);
+                } else {
+                    dbStatusEl.textContent = resp.data.error || 'Reset failed';
+                    dbStatusEl.className = 'settings-save-status error';
+                }
+                setTimeout(function () { dbStatusEl.textContent = ''; }, 5000);
+            })
+            .catch(function () {
+                dbResetBtn.disabled = false;
+                dbStatusEl.textContent = 'Network error';
+                dbStatusEl.className = 'settings-save-status error';
+                setTimeout(function () { dbStatusEl.textContent = ''; }, 3000);
+            });
+        });
     }
 
     function populateSettingsForm(settings) {

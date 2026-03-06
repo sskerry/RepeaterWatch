@@ -606,6 +606,18 @@ def _device_info(name):
     return {"name": name, "path": path}
 
 
+@api.route("/database/reset", methods=["POST"])
+def database_reset():
+    from database import retention
+    conn = models._conn()
+    tables = list(retention.TABLES_WITH_TS) + ["neighbors", "device_info"]
+    for table in tables:
+        conn.execute(f"DELETE FROM {table}")
+    conn.commit()
+    conn.execute("VACUUM")
+    return jsonify({"status": "ok"})
+
+
 @api.route("/radio/usb")
 def radio_usb_status():
     pin = config.USB_RELAY_GPIO_PIN
