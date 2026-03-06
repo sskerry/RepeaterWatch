@@ -223,12 +223,15 @@ var SensorCharts = (function () {
         charts.battCurr.setOption({ series: [{ data: _ts2data(data.timestamps, data.ch0_current) }] });
         charts.loadVolt.setOption({ series: [{ data: _ts2data(data.timestamps, data.ch1_voltage) }] });
         var loadCurrData = _ts2data(data.timestamps, data.ch1_current);
-        var loadCurrSum = 0, loadCurrCnt = 0;
-        for (var i = 0; i < data.ch1_current.length; i++) {
-            if (data.ch1_current[i] != null) { loadCurrSum += data.ch1_current[i]; loadCurrCnt++; }
+        var avgLine = [];
+        var WIN = 300; // 5-minute rolling window in seconds
+        for (var i = 0; i < data.timestamps.length; i++) {
+            var sum = 0, cnt = 0;
+            for (var j = i; j >= 0 && data.timestamps[i] - data.timestamps[j] <= WIN; j--) {
+                if (data.ch1_current[j] != null) { sum += data.ch1_current[j]; cnt++; }
+            }
+            avgLine.push([data.timestamps[i] * 1000, cnt ? Math.round(sum / cnt * 100) / 100 : null]);
         }
-        var loadCurrAvg = loadCurrCnt ? Math.round(loadCurrSum / loadCurrCnt * 100) / 100 : 0;
-        var avgLine = data.timestamps.map(function (t) { return [t * 1000, loadCurrAvg]; });
         charts.loadCurr.setOption({ series: [
             { data: loadCurrData },
             { data: avgLine, lineStyle: { type: 'dashed', width: 1.5 } },
