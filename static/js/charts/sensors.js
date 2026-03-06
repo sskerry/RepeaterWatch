@@ -89,17 +89,27 @@ var SensorCharts = (function () {
             { name: 'Load mA', color: '#ef476f' },
         ]));
 
-        // Solar Voltage (Ch2)
+        // Charge Voltage (Ch2)
         charts.solarVolt = echarts.init(elements.solarVolt);
         charts.solarVolt.setOption(makeOption('V', [
-            { name: 'Solar V', color: '#f4a261', area: 'rgba(244,162,97,0.1)' },
+            { name: 'Charge V', color: '#f4a261', area: 'rgba(244,162,97,0.1)' },
         ]));
 
-        // Solar Current (Ch2)
+        // Charge Current (Ch2)
         charts.solarCurr = echarts.init(elements.solarCurr);
         charts.solarCurr.setOption(makeOption('mA', [
-            { name: 'Solar mA', color: '#e76f51' },
+            { name: 'Charge mA', color: '#e76f51' },
         ]));
+
+        // Power (W)
+        if (elements.power) {
+            charts.power = echarts.init(elements.power);
+            charts.power.setOption(makeOption('W', [
+                { name: 'Battery W', color: '#06d6a0' },
+                { name: 'Load W', color: '#ef476f' },
+                { name: 'Charge W', color: '#f4a261' },
+            ]));
+        }
 
         // Charger Status (BQ24074)
         if (elements.chargerStatus) {
@@ -194,6 +204,10 @@ var SensorCharts = (function () {
         ]));
     }
 
+    function _mwToW(values) {
+        return values.map(function (v) { return v != null ? v / 1000 : null; });
+    }
+
     function _ts2data(timestamps, values) {
         var d = [];
         for (var i = 0; i < timestamps.length; i++) {
@@ -213,6 +227,15 @@ var SensorCharts = (function () {
         }
         if (charts.solarCurr && data.ch2_current) {
             charts.solarCurr.setOption({ series: [{ data: _ts2data(data.timestamps, data.ch2_current) }] });
+        }
+        if (charts.power && data.ch0_power) {
+            charts.power.setOption({
+                series: [
+                    { data: _ts2data(data.timestamps, _mwToW(data.ch0_power)) },
+                    { data: _ts2data(data.timestamps, _mwToW(data.ch1_power)) },
+                    { data: _ts2data(data.timestamps, _mwToW(data.ch2_power)) },
+                ],
+            });
         }
     }
 

@@ -185,6 +185,7 @@
             loadCurr: document.getElementById('chart-sensor-load-curr'),
             solarVolt: document.getElementById('chart-sensor-solar-volt'),
             solarCurr: document.getElementById('chart-sensor-solar-curr'),
+            power: document.getElementById('chart-sensor-power'),
             chargerStatus: document.getElementById('chart-sensor-charger'),
             temp: document.getElementById('chart-sensor-temp'),
             humidity: document.getElementById('chart-sensor-humidity'),
