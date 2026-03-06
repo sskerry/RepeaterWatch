@@ -4,6 +4,8 @@ import logging
 import threading
 import time
 
+import config
+
 logger = logging.getLogger(__name__)
 
 try:
@@ -84,8 +86,10 @@ class AS3935:
             self._configure()
             self._setup_irq()
             self._available = True
-            logger.info("AS3935 initialized — GPIO%d, cap=%dpF, outdoors, gpio_lib=%s",
-                        self._irq_gpio, CAPACITANCE, _GPIO_LIB)
+            logger.info("AS3935 initialized — GPIO%d, cap=%dpF, mode=%s, noise=%d, watchdog=%d, spike=%d, gpio_lib=%s",
+                        self._irq_gpio, CAPACITANCE, config.AS3935_AFE_MODE,
+                        config.AS3935_NOISE_FLOOR, config.AS3935_WATCHDOG,
+                        config.AS3935_SPIKE_REJECTION, _GPIO_LIB)
             return True
         except Exception:
             logger.exception("AS3935 init failed")
@@ -117,8 +121,9 @@ class AS3935:
         self._sing_reg_write(_REG_CONFIG0, 0x01, 0x00)
         time.sleep(0.002)
 
-        # Set outdoors mode (AFE_GB bits [5:1] in reg0)
-        self._sing_reg_write(_REG_CONFIG0, 0x3E, OUTDOORS_AFE << 1)
+        # Set AFE mode (AFE_GB bits [5:1] in reg0)
+        afe = INDOORS_AFE if config.AS3935_AFE_MODE == "indoor" else OUTDOORS_AFE
+        self._sing_reg_write(_REG_CONFIG0, 0x3E, afe << 1)
 
         # Enable disturber reporting (clear MASK_DIST bit 5 in reg3)
         self._sing_reg_write(_REG_CONFIG3, 0x20, 0x00)
@@ -131,14 +136,14 @@ class AS3935:
         cap_val = CAPACITANCE // 8
         self._sing_reg_write(_REG_TUNE_CAP, 0x0F, cap_val)
 
-        # Noise floor level 2 (bits [6:4] in reg1)
-        self._sing_reg_write(_REG_CONFIG1, 0x70, 2 << 4)
+        # Noise floor level (bits [6:4] in reg1)
+        self._sing_reg_write(_REG_CONFIG1, 0x70, config.AS3935_NOISE_FLOOR << 4)
 
-        # Watchdog threshold 2 (bits [3:0] in reg1)
-        self._sing_reg_write(_REG_CONFIG1, 0x0F, 2)
+        # Watchdog threshold (bits [3:0] in reg1)
+        self._sing_reg_write(_REG_CONFIG1, 0x0F, config.AS3935_WATCHDOG)
 
-        # Spike rejection 2 (bits [3:0] in reg2)
-        self._sing_reg_write(_REG_CONFIG2, 0x0F, 2)
+        # Spike rejection (bits [3:0] in reg2)
+        self._sing_reg_write(_REG_CONFIG2, 0x0F, config.AS3935_SPIKE_REJECTION)
 
         # Calibrate RCO
         self._write_reg(_REG_CALIB, 0x96)

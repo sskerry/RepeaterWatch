@@ -37,6 +37,10 @@ USB_RELAY_GPIO_PIN = int(os.environ.get("MESHCORE_USB_RELAY_GPIO", "17"))
 
 SENSOR_POLL_ENABLED = os.environ.get("MESHCORE_SENSOR_POLL", "1") != "0"
 AS3935_IRQ_GPIO = int(os.environ.get("MESHCORE_AS3935_IRQ_GPIO", "18"))
+AS3935_AFE_MODE = os.environ.get("MESHCORE_AS3935_AFE_MODE", "indoor")  # "indoor" or "outdoor"
+AS3935_NOISE_FLOOR = int(os.environ.get("MESHCORE_AS3935_NOISE_FLOOR", "3"))  # 0-7
+AS3935_WATCHDOG = int(os.environ.get("MESHCORE_AS3935_WATCHDOG", "3"))  # 0-15
+AS3935_SPIKE_REJECTION = int(os.environ.get("MESHCORE_AS3935_SPIKE_REJECTION", "3"))  # 0-15
 
 BQ24074_CHG_GPIO = int(os.environ.get("MESHCORE_BQ24074_CHG_GPIO", "19"))
 BQ24074_PGOOD_GPIO = int(os.environ.get("MESHCORE_BQ24074_PGOOD_GPIO", "13"))
