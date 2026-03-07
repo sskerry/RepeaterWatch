@@ -498,7 +498,7 @@
                     <h3>Radio Control</h3>
                 </div>
                 <p class="tool-desc">Hardware reset the radio via GPIO, or enter bootloader mode for firmware updates.</p>
-                <div class="radio-control-btns">
+                <div class="card-actions">
                     <button id="reboot-radio-btn" class="reboot-btn">Reset Radio</button>
                     <button id="bootloader-radio-btn" class="reboot-btn bootloader-btn">Bootloader Mode</button>
                 </div>
@@ -511,7 +511,7 @@
                     <h3>Radio USB</h3>
                 </div>
                 <p class="tool-desc">Toggle the USB power relay to the radio.</p>
-                <div class="radio-control-btns">
+                <div class="card-actions">
                     <button id="usb-relay-btn" class="reboot-btn">Enable Radio USB</button>
                     <span id="usb-relay-status" class="settings-save-status"></span>
                 </div>
@@ -535,7 +535,7 @@
                         <span>Power Good</span>
                     </div>
                 </div>
-                <div class="radio-control-btns">
+                <div class="card-actions">
                     <button id="bq24074-toggle-btn" class="reboot-btn">Disable Charging</button>
                     <span id="bq24074-status-msg" class="settings-save-status"></span>
                 </div>
@@ -548,7 +548,9 @@
                     <h3>Reboot Pi</h3>
                 </div>
                 <p class="tool-desc">Reboot the Raspberry Pi. All services will restart automatically.</p>
-                <button id="reboot-pi-btn" class="reboot-btn">Reboot Pi</button>
+                <div class="card-actions">
+                    <button id="reboot-pi-btn" class="reboot-btn">Reboot Pi</button>
+                </div>
             </div>
 
             <!-- Terminal Card -->
@@ -607,8 +609,10 @@
                         </select>
                     </div>
                 </div>
-                <button id="settings-save-btn" class="save-btn">Save</button>
-                <span id="settings-save-status" class="settings-save-status"></span>
+                <div class="card-actions">
+                    <button id="settings-save-btn" class="save-btn">Save</button>
+                    <span id="settings-save-status" class="settings-save-status"></span>
+                </div>
             </div>
 
             <div class="tool-card settings-card">
@@ -621,8 +625,10 @@
                     <input type="text" id="flash-serial-port" class="settings-input" spellcheck="false"
                            placeholder="/dev/serial/by-id/..." />
                 </div>
-                <button id="fw-settings-save-btn" class="save-btn">Save</button>
-                <span id="fw-settings-save-status" class="settings-save-status"></span>
+                <div class="card-actions">
+                    <button id="fw-settings-save-btn" class="save-btn">Save</button>
+                    <span id="fw-settings-save-status" class="settings-save-status"></span>
+                </div>
             </div>
             <div class="tool-card settings-card">
                 <div class="tool-card-header">
@@ -630,8 +636,10 @@
                     <h3>Database</h3>
                 </div>
                 <p class="tool-desc">Delete all collected data and start fresh. Settings are preserved.</p>
-                <button id="db-reset-btn" class="flash-btn" style="background:#c0392b;">Delete All Data</button>
-                <span id="db-reset-status" class="settings-save-status"></span>
+                <div class="card-actions">
+                    <button id="db-reset-btn" class="danger-btn">Delete All Data</button>
+                    <span id="db-reset-status" class="settings-save-status"></span>
+                </div>
             </div>
         </div><!-- .settings-grid -->
     </div>

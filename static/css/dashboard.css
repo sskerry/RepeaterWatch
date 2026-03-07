@@ -446,6 +446,8 @@ td.dir-rx { color: var(--green); }
     border: 1px solid var(--border);
     border-radius: 10px;
     padding: 20px;
+    display: flex;
+    flex-direction: column;
     transition: border-color 0.25s, box-shadow 0.25s;
 }
 
@@ -458,7 +460,7 @@ td.dir-rx { color: var(--green); }
     display: flex;
     align-items: center;
     gap: 10px;
-    margin-bottom: 8px;
+    margin-bottom: 14px;
 }
 
 .tool-icon {
@@ -538,8 +540,8 @@ td.dir-rx { color: var(--green); }
     background: #e65100;
     color: #fff;
     border: none;
-    padding: 6px 18px;
-    border-radius: 4px;
+    padding: 8px 20px;
+    border-radius: 6px;
     cursor: pointer;
     font-size: 0.85rem;
     font-weight: 600;
@@ -621,8 +623,8 @@ td.dir-rx { color: var(--green); }
     background: rgba(255,255,255,0.08);
     color: var(--text);
     border: 1px solid var(--border);
-    padding: 4px 14px;
-    border-radius: 4px;
+    padding: 6px 14px;
+    border-radius: 6px;
     cursor: pointer;
     font-size: 0.8rem;
     font-weight: 600;
@@ -665,7 +667,7 @@ td.dir-rx { color: var(--green); }
     color: var(--text);
     border: 1px solid var(--border);
     padding: 8px 20px;
-    border-radius: 4px;
+    border-radius: 6px;
     cursor: pointer;
     font-size: 0.85rem;
     font-weight: 600;
@@ -688,6 +690,36 @@ td.dir-rx { color: var(--green); }
     border-color: var(--accent);
 }
 
+.danger-btn {
+    background: #c0392b;
+    color: #fff;
+    border: none;
+    padding: 8px 20px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 0.85rem;
+    font-weight: 600;
+    white-space: nowrap;
+    transition: background 0.15s;
+}
+
+.danger-btn:hover:not(:disabled) {
+    background: #a93226;
+}
+
+.danger-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+.card-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-top: auto;
+}
+
 .bq24074-indicators {
     display: flex;
     gap: 12px;
@@ -704,12 +736,6 @@ td.dir-rx { color: var(--green); }
     border: 1px solid var(--border);
     font-size: 0.85rem;
     color: var(--text);
-}
-
-.radio-control-btns {
-    display: flex;
-    gap: 10px;
-    flex-wrap: wrap;
 }
 
 .bootloader-btn {
@@ -1109,8 +1135,8 @@ footer strong {
     background: var(--accent);
     color: #fff;
     border: none;
-    padding: 8px 24px;
-    border-radius: 4px;
+    padding: 8px 20px;
+    border-radius: 6px;
     cursor: pointer;
     font-size: 0.85rem;
     font-weight: 600;
