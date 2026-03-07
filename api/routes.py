@@ -614,7 +614,6 @@ def database_reset():
     for table in tables:
         conn.execute(f"DELETE FROM {table}")
     conn.commit()
-    conn.execute("VACUUM")
     return jsonify({"status": "ok"})
 
 
