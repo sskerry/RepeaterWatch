@@ -12,7 +12,7 @@
 |---|------|--------|
 | 0 | Git/GitHub setup | ✅ Done — private repo, SSH keys, remotes configured |
 | 1 | Understand the codebase | ✅ Done — see notes below |
-| 2 | Clean install documentation | 🔄 In progress — install process validated on home Pi |
+| 2 | Clean install documentation | ✅ Done — docs/INSTALL.md written and validated |
 | 3 | Get it running on repeater hardware | ✅ Done on home Pi — all three services running |
 | 4 | Explore sensors and GPIO | 🔄 In progress — GPIO wiring doc created, reset pin confirmed |
 | 5 | Customize for CLUB1 / CLUB2 | ⬜ Not started |
@@ -22,10 +22,10 @@
 
 ## Current Focus
 
-**Goal 2 — Write up the install process as a proper standalone document**
+**Goal 4 — Wire GPIO reset pin on home Pi, then prepare for mountain Pi deployment**
 
-RepeaterWatch is fully running on the home Pi alongside mctomqtt via SerialMux.
-Next steps: wire GPIO reset pin, then document the full install process for the mountain Pi deployment.
+INSTALL.md is complete and validated. Update workflow documented.
+Next: wire Pi GPIO 4 → Ikoka RESET pad, test remote reset from dashboard.
 
 ---
 
@@ -61,7 +61,7 @@ Next steps: wire GPIO reset pin, then document the full install process for the 
 - USB relay circuit (GPIO 17) needs clarification from original developer (MrAlders0n)
 - Ikoka stick has custom firmware with packet logging enabled — required for serial data output
 
-### Session 3 — 2026-03-08
+### Session 3 (continued) — 2026-03-08
 - Found SerialMux repo: https://github.com/MrAlders0n/SerialMux — single Python script, MIT license
 - Installed SerialMux at `/opt/SerialMux/` with its own Python venv
 - Wrote systemd service file for SerialMux (not included in the repo) — runs as root
@@ -77,6 +77,14 @@ Next steps: wire GPIO reset pin, then document the full install process for the 
 - **RepeaterWatch is live at http://PI_IP:5000 and reading real device data**
 - Device confirmed: Ikoka Stick-E22-30dBm (Xiao_nrf52), firmware 1.13.0-letsmesh.net
 - Harmless warning: `stats-extpower` command not supported by this firmware — can be ignored
+- Fixed two bugs: service must be named `RepeaterWatch` exactly; must run as root (no User= line)
+- Pi web terminal and service status page now working correctly
+- INSTALL.md written, committed, pushed — full validated install guide in docs/
+- Discussed update workflow (upstream → Mac → Pi) — documented in INSTALL.md and MEMORY.md
+- Discussed compatibility: works with any nRF52840 MeshCore device; ESP32 monitoring works but flash/reset needs new code
+- Identified ESP32 support as a future upstream contribution
+- Clarified contribution workflow: private repo requires a temporary public fork for PRs
+- No plans to customize core files — upstream updates will be conflict-free
 
 ---
 
