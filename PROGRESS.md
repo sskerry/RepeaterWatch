@@ -2,7 +2,7 @@
 
 **Owner:** MYCALL (representing CLUB1 and CLUB2)
 **Hardware target:** Raspberry Pi 4 + Ikoka stick MeshCore device
-**Last updated:** 2026-03-07
+**Last updated:** 2026-03-08
 
 ---
 
@@ -12,8 +12,8 @@
 |---|------|--------|
 | 0 | Git/GitHub setup | ✅ Done — private repo, SSH keys, remotes configured |
 | 1 | Understand the codebase | ✅ Done — see notes below |
-| 2 | Clean install documentation | 🔄 In progress |
-| 3 | Get it running on repeater hardware | 🔄 In progress — home Pi set up as test bed |
+| 2 | Clean install documentation | 🔄 In progress — install process validated on home Pi |
+| 3 | Get it running on repeater hardware | ✅ Done on home Pi — all three services running |
 | 4 | Explore sensors and GPIO | 🔄 In progress — GPIO wiring doc created, reset pin confirmed |
 | 5 | Customize for CLUB1 / CLUB2 | ⬜ Not started |
 | 6 | Maintain clean upstream upgrade path | ⬜ Ongoing consideration |
@@ -22,10 +22,10 @@
 
 ## Current Focus
 
-**Goals 2 & 3 — Install documentation + home Pi test deployment**
+**Goal 2 — Write up the install process as a proper standalone document**
 
-Home Pi (meshcore-site1, PI_IP) is set up as a test bed. mctomqtt (letsmesh) is
-already running on it. Next step is to install SerialMux and then RepeaterWatch alongside it.
+RepeaterWatch is fully running on the home Pi alongside mctomqtt via SerialMux.
+Next steps: wire GPIO reset pin, then document the full install process for the mountain Pi deployment.
 
 ---
 
@@ -61,6 +61,23 @@ already running on it. Next step is to install SerialMux and then RepeaterWatch 
 - USB relay circuit (GPIO 17) needs clarification from original developer (MrAlders0n)
 - Ikoka stick has custom firmware with packet logging enabled — required for serial data output
 
+### Session 3 — 2026-03-08
+- Found SerialMux repo: https://github.com/MrAlders0n/SerialMux — single Python script, MIT license
+- Installed SerialMux at `/opt/SerialMux/` with its own Python venv
+- Wrote systemd service file for SerialMux (not included in the repo) — runs as root
+- SerialMux running, virtual ports confirmed: `/dev/ttyV0`, `/dev/ttyV1`, `/dev/ttyV2`
+- Reconfigured mctomqtt to use `/dev/ttyV1` (was raw serial by-id path)
+- Installed RepeaterWatch to `/opt/RepeaterWatch/` via rsync from Mac
+- Created `meshcoremon` system user (no shell, no home directory)
+- Set up Python 3.13 venv — note: lgpio requires manual symlink on Debian 13 trixie (see install notes)
+- Created `/etc/sudoers.d/meshcoremon` for firmware flash service control
+- Created `.env` with correct settings (ttyV0 for RepeaterWatch, ttyV2 for terminal, sensor poll disabled)
+- Auth disabled by commenting out `MESHCORE_PASSWORD` in `.env`
+- Installed and started `meshcore-monitor` systemd service — depends on SerialMux
+- **RepeaterWatch is live at http://PI_IP:5000 and reading real device data**
+- Device confirmed: Ikoka Stick-E22-30dBm (Xiao_nrf52), firmware 1.13.0-letsmesh.net
+- Harmless warning: `stats-extpower` command not supported by this firmware — can be ignored
+
 ---
 
 ## Decisions Log
@@ -71,6 +88,8 @@ already running on it. Next step is to install SerialMux and then RepeaterWatch 
 | 2026-03-07 | Disable sensor polling initially | No sensor hardware on hand yet |
 | 2026-03-07 | Use home Pi (meshcore-site1) as test bed | Low-stakes production deployment, safe to experiment on |
 | 2026-03-07 | Store Claude SSH key in Nextcloud | Allows Claude Code access from any Mac without re-setup |
+| 2026-03-08 | Run SerialMux as root | Needs to create /dev symlinks; standard for hardware daemons |
+| 2026-03-08 | Disable auth (comment out MESHCORE_PASSWORD) | Home Pi is on a trusted local network |
 
 ---
 
@@ -79,29 +98,38 @@ already running on it. Next step is to install SerialMux and then RepeaterWatch 
 - Will the Pi have internet access at the mountain repeater site for initial setup?
 - What network/IP scheme is used at the site — how will the dashboard be accessed remotely?
 - USB relay circuit (GPIO 17): what is it switching, is it necessary, and how is it wired? (ask MrAlders0n)
-- What OS image will be used on the mountain Pi? (home Pi is Debian 13 trixie — use same?)
+- What OS image will be used on the mountain Pi? (use Debian 13 trixie to match home Pi)
 
 ---
 
 ## Install Checklist (home Pi — meshcore-site1)
 
-Already in place:
 - [x] Pi running Debian 13 (trixie)
 - [x] SSH enabled
 - [x] mctomqtt (letsmesh) installed and running
 - [x] Ikoka stick connected at `/dev/ttyACM0`
 - [x] `claude` user created with passwordless sudo
-
-Still to do:
-- [ ] Install SerialMux
-- [ ] Reconfigure mctomqtt to use SerialMux virtual port instead of raw serial
-- [ ] Install RepeaterWatch to `/opt/RepeaterWatch`
-- [ ] Set up Python venv and install dependencies
-- [ ] Create `.env` file (use SerialMux virtual port, disable sensor polling)
-- [ ] Test manually: `python app.py` — check logs, open dashboard in browser
-- [ ] Install and enable RepeaterWatch systemd service
-- [ ] Verify both mctomqtt and RepeaterWatch run together without serial conflict
+- [x] SerialMux installed at `/opt/SerialMux/`, systemd service running
+- [x] mctomqtt reconfigured to use `/dev/ttyV1`
+- [x] RepeaterWatch installed at `/opt/RepeaterWatch/`
+- [x] `meshcoremon` system user created
+- [x] Python venv created, dependencies installed, lgpio symlinked
+- [x] `/etc/sudoers.d/meshcoremon` created
+- [x] `.env` file configured (ttyV0, sensor poll off, auth disabled)
+- [x] `meshcore-monitor` systemd service installed, enabled, running
+- [x] Dashboard live at http://PI_IP:5000 — reading real device data
 - [ ] Wire GPIO 4 → Ikoka RESET pin and test remote reset from dashboard
+- [ ] Write up full install process as `docs/INSTALL.md`
+
+---
+
+## SerialMux Port Assignments (home Pi)
+
+| Virtual Port | Assigned To | Purpose |
+|---|---|---|
+| `/dev/ttyV0` | RepeaterWatch | Main data polling |
+| `/dev/ttyV1` | mctomqtt | LetsMesh cloud relay |
+| `/dev/ttyV2` | RepeaterWatch terminal | Web terminal feature |
 
 ---
 
