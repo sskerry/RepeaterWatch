@@ -4,5 +4,7 @@ __pycache__/
 *.db
 *.db-wal
 *.db-shm
-.claude/
+.claude/*
+!.claude/commands/
+!.claude/commands/**
 .env
