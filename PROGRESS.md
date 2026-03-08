@@ -12,6 +12,7 @@
 |---|------|--------|
 | 1 | Understand the codebase | ✅ Done — see notes below |
 | 2 | Clean install documentation | 🔄 In progress — draft in this file |
+| 0 | Git/GitHub setup | ✅ Done — private repo, SSH keys, remotes configured |
 | 3 | Get it running on repeater hardware | ⬜ Not started |
 | 4 | Explore sensors and GPIO | ⬜ Not started (no extra hardware yet) |
 | 5 | Customize for CLUB1 / CLUB2 | ⬜ Not started |
@@ -34,6 +35,10 @@ A full plain-English install guide was drafted in the first session (see session
 - Learned how the project works: serial reader → stats poller → SQLite → Flask API → dashboard
 - Identified key config settings needed for Ikoka stick setup
 - Drafted a step-by-step install guide (in chat — needs to be turned into a standalone doc)
+- Set up Git identity: sskerry <user@example.com>
+- Generated SSH key and added to GitHub account (sskerry)
+- Created new **private** GitHub repo (sskerry/RepeaterWatch) — old public fork deleted
+- Remotes configured: `origin` = private repo, `upstream` = MrAlders0n/RepeaterWatch
 - Key decisions / findings:
   - Default serial port in config is `/dev/ttyV0` (SerialMux) — for direct Ikoka use, change to `/dev/ttyUSB0` or use `/dev/serial/by-id/...`
   - `MESHCORE_SENSOR_POLL=0` should be set until sensor hardware is available
@@ -81,8 +86,8 @@ A full plain-English install guide was drafted in the first session (see session
 
 ## Notes on Upstream Updates
 
-**MYCALL's fork:** `https://github.com/sskerry/RepeaterWatch`
-**Upstream (original):** `https://github.com/MrAlders0n/RepeaterWatch` — tracked as a Git remote called `upstream`.
+**MYCALL's repo (private):** `https://github.com/sskerry/RepeaterWatch`
+**Upstream (original, public):** `https://github.com/MrAlders0n/RepeaterWatch` — tracked as a Git remote called `upstream`.
 
 To pull future upstream changes without losing local work:
 ```bash
