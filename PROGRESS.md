@@ -10,11 +10,11 @@
 
 | # | Goal | Status |
 |---|------|--------|
-| 1 | Understand the codebase | ✅ Done — see notes below |
-| 2 | Clean install documentation | 🔄 In progress — draft in this file |
 | 0 | Git/GitHub setup | ✅ Done — private repo, SSH keys, remotes configured |
-| 3 | Get it running on repeater hardware | ⬜ Not started |
-| 4 | Explore sensors and GPIO | ⬜ Not started (no extra hardware yet) |
+| 1 | Understand the codebase | ✅ Done — see notes below |
+| 2 | Clean install documentation | 🔄 In progress |
+| 3 | Get it running on repeater hardware | 🔄 In progress — home Pi set up as test bed |
+| 4 | Explore sensors and GPIO | 🔄 In progress — GPIO wiring doc created, reset pin confirmed |
 | 5 | Customize for CLUB1 / CLUB2 | ⬜ Not started |
 | 6 | Maintain clean upstream upgrade path | ⬜ Ongoing consideration |
 
@@ -22,9 +22,10 @@
 
 ## Current Focus
 
-**Goal 2 — Installation documentation**
+**Goals 2 & 3 — Install documentation + home Pi test deployment**
 
-A full plain-English install guide was drafted in the first session (see session notes below). Next step is to validate it on the actual Pi hardware.
+Home Pi (meshcore-site1, PI_IP) is set up as a test bed. mctomqtt (letsmesh) is
+already running on it. Next step is to install SerialMux and then RepeaterWatch alongside it.
 
 ---
 
@@ -39,12 +40,26 @@ A full plain-English install guide was drafted in the first session (see session
 - Generated SSH key and added to GitHub account (sskerry)
 - Created new **private** GitHub repo (sskerry/RepeaterWatch) — old public fork deleted
 - Remotes configured: `origin` = private repo, `upstream` = MrAlders0n/RepeaterWatch
-- Key decisions / findings:
-  - Default serial port in config is `/dev/ttyV0` (SerialMux) — for direct Ikoka use, change to `/dev/ttyUSB0` or use `/dev/serial/by-id/...`
-  - `MESHCORE_SENSOR_POLL=0` should be set until sensor hardware is available
-  - No SerialMux needed for this deployment
-  - Set `MESHCORE_SECRET_KEY` to a fixed value so login sessions survive app restarts
-  - The `pi` user needs to be in the `dialout` group for serial port access
+
+### Session 2 — 2026-03-07
+- Discussed how Claude Code memory/context works across sessions
+- Moved memory file from `~/.claude/` (local only) to Nextcloud for cross-machine sync
+- Updated `CLAUDE.md` to reference new memory path
+- Generated SSH key pair for Claude Code Pi access — stored in `~/.ssh/`
+- Created `claude` user on home Pi with passwordless sudo
+- Discovered home Pi OS is **Debian 13 (trixie)**, not Raspberry Pi OS
+- Confirmed Ikoka stick serial port is `/dev/ttyACM0` (CDC ACM device, not ttyUSB0)
+- Confirmed Seeed Studio XIAO nRF52840 = the Ikoka stick's processor
+- Discovered mctomqtt (letsmesh) is already running and holds the serial port exclusively
+- **Decision reversed:** SerialMux IS needed — mctomqtt and RepeaterWatch must share the port
+- Confirmed mctomqtt config lives at `/etc/mctomqtt/config.toml` + `/etc/mctomqtt/config.d/00-user.toml`
+- Confirmed mctomqtt uses `/dev/serial/by-id/usb-Seeed_Studio_XIAO_nRF52840_85A0C3E1D8C354BB-if00`
+- Local MQTT broker at LOCAL_IP no longer needed (was for testing, mctomqtt handles cloud publish)
+- Confirmed RepeaterWatch has full GPIO reset/DFU/firmware flash capability in the codebase
+- Created `docs/gpio-wiring.md` — pin reference for Pi 4 + Ikoka stick
+- Confirmed RESET pin is accessible on the Ikoka stick
+- USB relay circuit (GPIO 17) needs clarification from original developer (MrAlders0n)
+- Ikoka stick has custom firmware with packet logging enabled — required for serial data output
 
 ---
 
@@ -52,35 +67,41 @@ A full plain-English install guide was drafted in the first session (see session
 
 | Date | Decision | Reason |
 |------|----------|--------|
-| 2026-03-07 | Skip SerialMux | Only one program needs serial access |
+| 2026-03-07 | ~~Skip SerialMux~~ → **USE SerialMux** | mctomqtt (letsmesh) already runs on the Pi and holds the serial port; SerialMux lets both services share it |
 | 2026-03-07 | Disable sensor polling initially | No sensor hardware on hand yet |
+| 2026-03-07 | Use home Pi (meshcore-site1) as test bed | Low-stakes production deployment, safe to experiment on |
+| 2026-03-07 | Store Claude SSH key in Nextcloud | Allows Claude Code access from any Mac without re-setup |
 
 ---
 
 ## Open Questions
 
-- What serial port path does the Ikoka stick appear as on the Pi? (Check with `ls /dev/serial/by-id/` after plugging in)
-- What OS image will be used on the Pi 4? (Raspberry Pi OS Lite recommended)
-- Will the Pi have internet access at the repeater site for initial setup?
+- Will the Pi have internet access at the mountain repeater site for initial setup?
 - What network/IP scheme is used at the site — how will the dashboard be accessed remotely?
+- USB relay circuit (GPIO 17): what is it switching, is it necessary, and how is it wired? (ask MrAlders0n)
+- What OS image will be used on the mountain Pi? (home Pi is Debian 13 trixie — use same?)
 
 ---
 
-## Install Checklist (for when we get to the Pi)
+## Install Checklist (home Pi — meshcore-site1)
 
-- [ ] Flash Pi OS to SD card
-- [ ] Enable SSH, set hostname, configure WiFi or ethernet
-- [ ] `sudo apt update && sudo apt upgrade -y`
-- [ ] `sudo apt install python3 python3-pip python3-venv git -y`
-- [ ] Copy project files to `/opt/RepeaterWatch`
-- [ ] `python3 -m venv venv && source venv/bin/activate && pip install -r requirements.txt`
-- [ ] Plug in Ikoka stick, find its serial port (`ls /dev/serial/by-id/`)
-- [ ] Create `.env` file with correct `MESHCORE_SERIAL_PORT` and other settings
-- [ ] Add `pi` user to `dialout` group: `sudo usermod -aG dialout pi`
+Already in place:
+- [x] Pi running Debian 13 (trixie)
+- [x] SSH enabled
+- [x] mctomqtt (letsmesh) installed and running
+- [x] Ikoka stick connected at `/dev/ttyACM0`
+- [x] `claude` user created with passwordless sudo
+
+Still to do:
+- [ ] Install SerialMux
+- [ ] Reconfigure mctomqtt to use SerialMux virtual port instead of raw serial
+- [ ] Install RepeaterWatch to `/opt/RepeaterWatch`
+- [ ] Set up Python venv and install dependencies
+- [ ] Create `.env` file (use SerialMux virtual port, disable sensor polling)
 - [ ] Test manually: `python app.py` — check logs, open dashboard in browser
-- [ ] Copy and enable systemd service: `sudo cp systemd/meshcore-monitor.service /etc/systemd/system/`
-- [ ] `sudo systemctl daemon-reload && sudo systemctl enable --now meshcore-monitor`
-- [ ] Verify service is running: `sudo systemctl status meshcore-monitor`
+- [ ] Install and enable RepeaterWatch systemd service
+- [ ] Verify both mctomqtt and RepeaterWatch run together without serial conflict
+- [ ] Wire GPIO 4 → Ikoka RESET pin and test remote reset from dashboard
 
 ---
 
