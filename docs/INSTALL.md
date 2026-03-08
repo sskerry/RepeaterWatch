@@ -435,6 +435,48 @@ Open a browser and go to `http://PI_IP_ADDRESS:5000` — the dashboard should lo
 
 ---
 
+## Updating RepeaterWatch
+
+When MrAlders0n releases updates to the original repo, here is how to pull them through
+to your Pi deployments.
+
+### On your Mac (pull upstream changes):
+
+```bash
+git fetch upstream
+git merge upstream/main
+git push origin main
+```
+
+`fetch` downloads the latest changes. `merge` applies them to your copy. `push` saves
+them to your GitHub fork. If there are any conflicts Git will tell you — ask Claude Code
+to help resolve them.
+
+### On each Pi (deploy the update):
+
+From your Mac, run the same rsync command used during install:
+
+```bash
+rsync -av --exclude='.git' --exclude='venv' --exclude='*.pyc' \
+  --exclude='__pycache__' --exclude='*.db' --exclude='.env' \
+  /path/to/RepeaterWatch/ user@PI_IP:/opt/RepeaterWatch/
+```
+
+Then restart the service:
+
+```bash
+ssh user@PI_IP "sudo systemctl restart RepeaterWatch"
+```
+
+The `.env` file and SQLite database are excluded from rsync and will not be affected.
+The venv is also excluded — if `requirements.txt` changed in the update, re-run:
+
+```bash
+ssh user@PI_IP "sudo /opt/RepeaterWatch/venv/bin/pip install -r /opt/RepeaterWatch/requirements.txt"
+```
+
+---
+
 ## After Installation
 
 - **GPIO reset wiring:** See `docs/gpio-wiring.md` for connecting the Pi GPIO 4 pin to the
