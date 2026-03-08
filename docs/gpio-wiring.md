@@ -63,10 +63,8 @@ Pi GPIO 4 (Pin 7) ──[ 100Ω ]── XIAO RESET pad
 A 100Ω series resistor is not strictly required but protects both devices if there's
 ever a wiring fault. Can be omitted if you want to keep it simple.
 
-**NEEDS CONFIRMATION:**
-- [ ] Is the XIAO RESET pin exposed/accessible on the Ikoka stick?
-- [ ] Is there a labeled pad, test point, or connector pin for it?
-- [ ] Contact Ikoka or inspect the hardware to confirm before wiring
+**STATUS: Confirmed**
+- [x] RESET pin is accessible on the Ikoka stick — no hardware modification needed
 
 ---
 
@@ -104,10 +102,13 @@ signal from GPIO 17. More compact but more components.
 **NEEDS CONFIRMATION:**
 - [ ] Does the Ikoka stick have a separate USB connection that can be switched, or is
       its USB permanently connected to the Pi?
-- [ ] Does the Ikoka stick's DFU process actually require USB relay switching, or does
-      the XIAO re-enumerate automatically after bootloader entry?
-- [ ] This feature may not be needed at all depending on Ikoka's USB wiring —
-      test reset/DFU without the relay first
+**STATUS: Needs clarification from original developer (MrAlders0n)**
+
+Questions to ask:
+- What is the USB relay actually switching — VBUS power, a USB hub port, or something else?
+- Is the relay necessary, or does the XIAO re-enumerate automatically after bootloader entry?
+- What relay/switch component did you use, and how is it wired between the Pi GPIO and USB?
+- Is this feature applicable to the Ikoka stick, or is it specific to your hardware setup?
 
 ---
 
