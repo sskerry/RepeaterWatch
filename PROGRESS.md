@@ -2,7 +2,7 @@
 
 **Owner:** MYCALL (representing CLUB1 and CLUB2)
 **Hardware target:** Raspberry Pi 4 + Ikoka stick MeshCore device
-**Last updated:** 2026-03-08
+**Last updated:** 2026-03-09
 
 ---
 
@@ -60,6 +60,17 @@ Next: wire Pi GPIO 4 → Ikoka RESET pad, test remote reset from dashboard.
 - Confirmed RESET pin is accessible on the Ikoka stick
 - USB relay circuit (GPIO 17) needs clarification from original developer (MrAlders0n)
 - Ikoka stick has custom firmware with packet logging enabled — required for serial data output
+
+### Session 4 — 2026-03-09
+
+- Confirmed all GPIO pins are configurable via `.env` (see pin summary below)
+- Confirmed BME280 (temp/humidity/pressure) and INA3221 (3-channel current/voltage) are both I2C — no GPIO pins needed
+- INA3221 channels: ch0 = battery, ch1 = load, ch2 = solar; polled every 10s
+- BME280 polled every 60s; uses I2C address 0x77 — note: some cheap modules default to 0x76
+- Added Note 3 (BME280) and Note 4 (INA3221) to `docs/gpio-wiring.md`
+- Added I2C sensor table to the gpio-wiring doc pin map section
+- Full pin summary: I2C bus on Pi pins 3+5 (GPIO2/3); GPIO pins 4, 6, 13, 17, 18, 19 for reset/relay/sensors
+- All sensor polling disabled globally with `MESHCORE_SENSOR_POLL=0`; individual sensors silently skip if library not installed
 
 ### Session 3 (continued) — 2026-03-08
 - Found SerialMux repo: https://github.com/MrAlders0n/SerialMux — single Python script, MIT license

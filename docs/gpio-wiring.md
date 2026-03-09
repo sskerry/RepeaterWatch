@@ -40,6 +40,20 @@ not the physical pin number on the Pi header. See the Pi header diagram at the b
 
 Also required for AS3935 and BQ24074: **I2C** (SDA = Pin 3, SCL = Pin 5) — not GPIO but worth noting.
 
+### I2C Sensors (no GPIO pin needed)
+
+These sensors use the I2C bus, which is a standard two-wire interface built into the Pi.
+The bus is always **SDA = Pi Pin 3 (GPIO2)** and **SCL = Pi Pin 5 (GPIO3)** — no `.env` pin setting is needed.
+
+| Sensor | I2C Address | Pi Pins Used | Function | Poll Rate |
+|--------|-------------|--------------|----------|-----------|
+| BME280 | 0x77 | SDA (Pin 3) + SCL (Pin 5) | Temperature, humidity, pressure | Every 60s |
+| INA3221 | 0x40 | SDA (Pin 3) + SCL (Pin 5) | Current/voltage monitor (3 channels) | Every 10s |
+
+Both sensors share the same two wires. Multiple I2C devices can coexist on the bus as long as their addresses differ (these two do).
+
+All sensor polling can be disabled by setting `MESHCORE_SENSOR_POLL=0` in your `.env` file (default is enabled).
+
 ---
 
 ## Note 1 — Radio Reset Line (GPIO 4 → XIAO RESET)
@@ -109,6 +123,69 @@ Questions to ask:
 - Is the relay necessary, or does the XIAO re-enumerate automatically after bootloader entry?
 - What relay/switch component did you use, and how is it wired between the Pi GPIO and USB?
 - Is this feature applicable to the Ikoka stick, or is it specific to your hardware setup?
+
+---
+
+## Note 3 — BME280 (Temperature / Humidity / Pressure)
+
+**What it does:**
+Measures ambient temperature (°C), relative humidity (%), and barometric pressure (hPa).
+Useful for monitoring environmental conditions at a remote site.
+
+**Interface:** I2C at address `0x77`
+
+**Wiring:**
+```
+Pi 3.3V (Pin 1 or 17) ──► BME280 VCC
+Pi GND  (Pin 6 or 9)  ──► BME280 GND
+Pi SDA  (Pin 3)        ──► BME280 SDA
+Pi SCL  (Pin 5)        ──► BME280 SCL
+```
+
+**Software:**
+- Library required: `adafruit-circuitpython-bme280`
+- If the library is not installed, the sensor is silently skipped — no errors, just no data
+- Data is read every 60 seconds and stored to the database
+
+**Note on address conflict:** BME280 also comes in a variant with address `0x76`. The code
+is hardcoded to `0x77` — make sure your module is configured (or jumpered) to `0x77`.
+Some cheap boards default to `0x76`, so check before buying.
+
+**STATUS: Optional — not yet purchased**
+
+---
+
+## Note 4 — INA3221 (3-Channel Current / Voltage Monitor)
+
+**What it does:**
+Measures bus voltage and current on three separate channels simultaneously. The original
+author uses it to monitor a solar power system:
+- **Channel 0 (ch0):** Battery voltage and current
+- **Channel 1 (ch1):** Load voltage and current (what the system is drawing)
+- **Channel 2 (ch2):** Solar panel voltage and current
+
+The code calculates power (watts) from voltage × current for each channel.
+
+**Interface:** I2C at address `0x40`
+
+**Wiring:**
+```
+Pi 3.3V (Pin 1 or 17) ──► INA3221 VCC (logic power)
+Pi GND  (Pin 6 or 9)  ──► INA3221 GND
+Pi SDA  (Pin 3)        ──► INA3221 SDA
+Pi SCL  (Pin 5)        ──► INA3221 SCL
+```
+
+Each channel also has IN+ and IN- terminals where the current-sense resistor goes inline
+with whatever circuit you are monitoring. Detailed hookup depends on your power setup.
+
+**Software:**
+- Library required: `adafruit-circuitpython-ina3221`
+- Like the BME280, silently skipped if library is not installed
+- Data is read every 10 seconds (more frequent due to real-time power monitoring use case)
+- On I2C error, the driver resets and reinitializes automatically on the next read
+
+**STATUS: Optional — not yet purchased**
 
 ---
 
@@ -182,8 +259,9 @@ D10 ●  (MOSI)        ●
    - More complex, adds components, not worth building until confirmed necessary
 
 4. **Add sensors later**
-   - AS3935 (lightning), BQ24074 (charger) — only if that hardware is purchased
-   - No wiring needed until then; sensor polling is disabled in `.env`
+   - AS3935 (lightning), BQ24074 (charger) — only if that hardware is purchased; need GPIO pins (see table above)
+   - BME280 (temp/humidity/pressure) and INA3221 (current/voltage) — I2C only, no GPIO pins; just connect SDA and SCL
+   - Sensor polling can be disabled globally with `MESHCORE_SENSOR_POLL=0` in `.env` until hardware is attached
 
 ---
 
