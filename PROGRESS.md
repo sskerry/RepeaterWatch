@@ -64,13 +64,15 @@ Next: wire Pi GPIO 4 → Ikoka RESET pad, test remote reset from dashboard.
 ### Session 4 — 2026-03-09
 
 - Confirmed all GPIO pins are configurable via `.env` (see pin summary below)
+- Confirmed all GPIO pins are configurable via `.env`; I2C pins are fixed on Pi pins 3+5
 - Confirmed BME280 (temp/humidity/pressure) and INA3221 (3-channel current/voltage) are both I2C — no GPIO pins needed
 - INA3221 channels: ch0 = battery, ch1 = load, ch2 = solar; polled every 10s
 - BME280 polled every 60s; uses I2C address 0x77 — note: some cheap modules default to 0x76
 - Added Note 3 (BME280) and Note 4 (INA3221) to `docs/gpio-wiring.md`
-- Added I2C sensor table to the gpio-wiring doc pin map section
-- Full pin summary: I2C bus on Pi pins 3+5 (GPIO2/3); GPIO pins 4, 6, 13, 17, 18, 19 for reset/relay/sensors
-- All sensor polling disabled globally with `MESHCORE_SENSOR_POLL=0`; individual sensors silently skip if library not installed
+- Added Note 5 (BQ24074) to `docs/gpio-wiring.md` — full explanation of all three GPIO pins (/CHG, /PGOOD, CE)
+- Fixed error in doc: BQ24074 is GPIO only, not I2C (AS3935 is the one that needs I2C)
+- Added "See note 5" references to all BQ24074 rows in the pin table
+- Set up GitHub SSH key on new Mac (ed25519, `~/.ssh/YOUR_GITHUB_KEY`)
 
 ### Session 3 (continued) — 2026-03-08
 - Found SerialMux repo: https://github.com/MrAlders0n/SerialMux — single Python script, MIT license
