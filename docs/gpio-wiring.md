@@ -1,7 +1,7 @@
 # GPIO Wiring Reference
 ## RepeaterWatch + Raspberry Pi 4 + Ikoka Stick (Seeed Studio XIAO nRF52840)
 
-**Last updated:** 2026-03-07
+**Last updated:** 2026-03-09
 **Status:** Partially confirmed — see notes on each connection
 
 ---
@@ -34,11 +34,11 @@ not the physical pin number on the Pi header. See the Pi header diagram at the b
 | Function | BCM GPIO | Pi Physical Pin | Connects To | Direct? | Notes |
 |----------|----------|-----------------|-------------|---------|-------|
 | AS3935 lightning IRQ | GPIO 18 | Pin 12 | AS3935 INT pin | Yes | Interrupt input |
-| BQ24074 charge status | GPIO 19 | Pin 35 | BQ24074 /CHG pin | Yes | Input, active low |
-| BQ24074 power good | GPIO 13 | Pin 33 | BQ24074 /PG pin | Yes | Input, active low |
-| BQ24074 charge enable | GPIO 6 | Pin 31 | BQ24074 CE pin | Yes | Output |
+| BQ24074 charge status | GPIO 19 | Pin 35 | BQ24074 /CHG pin | Yes | Input, active low — See note 5 |
+| BQ24074 power good | GPIO 13 | Pin 33 | BQ24074 /PG pin | Yes | Input, active low — See note 5 |
+| BQ24074 charge enable | GPIO 6 | Pin 31 | BQ24074 CE pin | Yes | Output — See note 5 |
 
-Also required for AS3935 and BQ24074: **I2C** (SDA = Pin 3, SCL = Pin 5) — not GPIO but worth noting.
+Note: **BQ24074 is GPIO only — no I2C required.** AS3935 requires I2C (SDA = Pin 3, SCL = Pin 5) in addition to its IRQ GPIO pin.
 
 ### I2C Sensors (no GPIO pin needed)
 
@@ -186,6 +186,45 @@ with whatever circuit you are monitoring. Detailed hookup depends on your power 
 - On I2C error, the driver resets and reinitializes automatically on the next read
 
 **STATUS: Optional — not yet purchased**
+
+---
+
+## Note 5 — BQ24074 Solar Charge Controller (GPIO 6, 13, 19)
+
+**What it is:**
+The BQ24074 is a Texas Instruments solar/Li-Ion battery charge controller IC. It manages
+charging a battery from a solar panel (or other DC source). The Pi doesn't control the
+charging itself — it just monitors status and can enable/disable charging remotely.
+
+**This is GPIO only — no I2C.** All three connections are direct pin-to-pin with the Pi.
+
+**The three pins and what they mean:**
+
+| Pin | BCM GPIO | Pi Physical | Direction | Logic | Meaning |
+|-----|----------|-------------|-----------|-------|---------|
+| /CHG | GPIO 19 | Pin 35 | Input | Active LOW | LOW = battery is actively charging |
+| /PGOOD | GPIO 13 | Pin 33 | Input | Active LOW | LOW = valid input power present (solar/DC connected) |
+| CE | GPIO 6 | Pin 31 | Output | Active HIGH | HIGH = charging disabled; LOW = charging enabled (default) |
+
+"Active low" means the signal is backwards from what you might expect — the pin is pulled
+HIGH normally, and goes LOW to indicate the event is happening.
+
+**What the code does:**
+- Reads `/CHG` and `/PGOOD` to report charging state and input power status on the dashboard
+- Can write to `CE` to remotely enable or disable charging via the RepeaterWatch API
+- Starts with CE LOW (charging enabled) on boot
+
+**Wiring:**
+```
+Pi GPIO 19 (Pin 35) ──► BQ24074 /CHG  (charge status output from chip)
+Pi GPIO 13 (Pin 33) ──► BQ24074 /PGOOD (power-good output from chip)
+Pi GPIO 6  (Pin 31) ──► BQ24074 CE    (charge enable input to chip)
+Pi GND     (Pin 6)  ──► BQ24074 GND   (common ground)
+```
+All connections are direct (no resistors needed) — the BQ24074 has internal pull-ups on
+/CHG and /PGOOD, and the Pi enables software pull-ups on those input pins.
+
+**STATUS: Optional — only relevant if using a BQ24074-based solar charger**
 
 ---
 
