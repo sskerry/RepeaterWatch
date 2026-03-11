@@ -207,12 +207,12 @@ rsync -av --exclude='.git' --exclude='venv' --exclude='*.pyc' \
   /path/to/RepeaterWatch/ user@PI_IP:/opt/RepeaterWatch/
 ```
 
-### 5b. Install lgpio system package
+### 5b. Install lgpio and Python dev headers
 
-lgpio is needed for GPIO control (reset button, firmware flashing):
+lgpio is needed for GPIO control. `python3-dev` is needed to compile RPi.GPIO from source:
 
 ```bash
-sudo apt install -y python3-lgpio
+sudo apt install -y python3-lgpio python3-dev
 ```
 
 ### 5c. Create a Python virtual environment and install dependencies

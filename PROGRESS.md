@@ -2,7 +2,7 @@
 
 **Owner:** MYCALL (representing CLUB1 and CLUB2)
 **Hardware target:** Raspberry Pi 4 + Ikoka stick MeshCore device
-**Last updated:** 2026-03-09
+**Last updated:** 2026-03-11
 
 ---
 
@@ -22,14 +22,35 @@
 
 ## Current Focus
 
-**Goal 4 — Wire GPIO reset pin on home Pi, then prepare for mountain Pi deployment**
+**Goal 3 (expanded) — Second deployment: meshcore-site2 (CM3 at PI_IP)**
 
-INSTALL.md is complete and validated. Update workflow documented.
-Next: wire Pi GPIO 4 → Ikoka RESET pad, test remote reset from dashboard.
+meshcore-site2 is fully installed and dashboard is live. No radio connected yet.
+Next steps: connect radio, update SerialMux port, install and configure mctomqtt,
+then switch service file from `Wants=` to `Requires=` for SerialMux dependency.
 
 ---
 
 ## Session Notes
+
+### Session 5 — 2026-03-11
+
+**USB relay wiring theory (documented in docs/gpio-wiring.md):**
+- Confirmed from build photos: relay is wired NO/COM
+- Working theory: relay interrupts VBUS (red wire) only on USB cable to Ikoka
+- Normal operation: VBUS cut, Ikoka runs on external battery — USB serial (CDC) still works without VBUS
+- Flashing: relay turns ON → VBUS connected → nRF52840 detects host power → enumerates as DFU device
+- Relay stays ON for entire flash, turns OFF when done
+- Note 2 in gpio-wiring.md updated with full theory and confirmation checklist
+- **Status: UNCONFIRMED — awaiting official confirmation from MrAlders0n; test build planned**
+
+**New deployment: meshcore-site2 (Compute Module 3, PI_IP)**
+- Re-flashed to 64-bit Raspberry Pi OS (trixie) — matches home Pi architecture (aarch64)
+- SSH access confirmed with existing `YOUR_SSH_KEY` key — same key will be used for all installs
+- Full stack installed: SerialMux + RepeaterWatch (mctomqtt to be configured when radio arrives)
+- New install note: `python3-dev` is required to build RPi.GPIO from source — not in INSTALL.md previously
+- No radio connected: SerialMux configured with `/dev/ttyACM0` placeholder, keeps retrying
+- RepeaterWatch service uses `Wants=SerialMux` (not `Requires=`) so it starts without virtual ports
+- Dashboard live at http://PI_IP:5000 — serial errors in logs are expected, no radio connected
 
 ### Session 1 — 2026-03-07
 - Did a full codebase read-through and explanation
@@ -111,6 +132,9 @@ Next: wire Pi GPIO 4 → Ikoka RESET pad, test remote reset from dashboard.
 | 2026-03-07 | Store Claude SSH key in Nextcloud | Allows Claude Code access from any Mac without re-setup |
 | 2026-03-08 | Run SerialMux as root | Needs to create /dev symlinks; standard for hardware daemons |
 | 2026-03-08 | Disable auth (comment out MESHCORE_PASSWORD) | Home Pi is on a trusted local network |
+| 2026-03-11 | Use `Wants=` instead of `Requires=` for SerialMux in service file | Allows RepeaterWatch to start when no radio is connected; change to `Requires=` once radio is present |
+| 2026-03-11 | Use same SSH key (`YOUR_SSH_KEY`) for all Pi installs | Simplifies access — one key works everywhere |
+| 2026-03-11 | Recommend 64-bit OS for all Pi deployments | Matches home Pi exactly, avoids architecture differences in lgpio symlinks and pip builds |
 
 ---
 
@@ -118,8 +142,9 @@ Next: wire Pi GPIO 4 → Ikoka RESET pad, test remote reset from dashboard.
 
 - Will the Pi have internet access at the mountain repeater site for initial setup?
 - What network/IP scheme is used at the site — how will the dashboard be accessed remotely?
-- USB relay circuit (GPIO 17): what is it switching, is it necessary, and how is it wired? (ask MrAlders0n)
-- What OS image will be used on the mountain Pi? (use Debian 13 trixie to match home Pi)
+- USB relay circuit (GPIO 17): working theory documented (VBUS-only, NO/COM) — awaiting official confirmation from MrAlders0n; test build planned
+- meshcore-site2: what will the permanent IP be once assigned?
+- meshcore-site2: mctomqtt credentials and config — needed when radio is connected
 
 ---
 
@@ -141,6 +166,29 @@ Next: wire Pi GPIO 4 → Ikoka RESET pad, test remote reset from dashboard.
 - [x] Dashboard live at http://PI_IP:5000 — reading real device data
 - [ ] Wire GPIO 4 → Ikoka RESET pin and test remote reset from dashboard
 - [ ] Write up full install process as `docs/INSTALL.md`
+
+---
+
+## Install Checklist (meshcore-site2 — CM3, PI_IP)
+
+- [x] Pi running 64-bit Raspberry Pi OS / Debian 13 (trixie)
+- [x] SSH enabled
+- [x] `claude` user created with passwordless sudo
+- [x] SerialMux installed at `/opt/SerialMux/`, systemd service running (placeholder port)
+- [x] RepeaterWatch installed at `/opt/RepeaterWatch/`
+- [x] `meshcoremon` system user created
+- [x] Python venv created, dependencies installed, lgpio symlinked
+- [x] `/etc/sudoers.d/meshcoremon` created
+- [x] `.env` file configured (ttyV0, sensor poll off, auth disabled)
+- [x] `RepeaterWatch` systemd service installed, enabled, running (`Wants=SerialMux`)
+- [x] Dashboard live at http://PI_IP:5000
+- [ ] Connect radio (Ikoka stick)
+- [ ] Update SerialMux `REAL_PORT` to actual by-id path
+- [ ] Update `.env` `MESHCORE_FLASH_SERIAL_PORT` to actual by-id path
+- [ ] Install and configure mctomqtt
+- [ ] Change service file from `Wants=` to `Requires=SerialMux`
+- [ ] Wire GPIO 4 → Ikoka RESET pin
+- [ ] Assign permanent IP, update records
 
 ---
 

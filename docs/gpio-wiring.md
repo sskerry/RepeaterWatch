@@ -1,7 +1,7 @@
 # GPIO Wiring Reference
 ## RepeaterWatch + Raspberry Pi 4 + Ikoka Stick (Seeed Studio XIAO nRF52840)
 
-**Last updated:** 2026-03-09
+**Last updated:** 2026-03-11
 **Status:** Partially confirmed — see notes on each connection
 
 ---
@@ -82,47 +82,54 @@ ever a wiring fault. Can be omitted if you want to keep it simple.
 
 ---
 
-## Note 2 — USB Relay (GPIO 17 → USB power switch)
+## Note 2 — USB Relay (GPIO 17 → USB VBUS switch)
+
+> **NOTE: The explanation below is our current working theory based on code analysis and
+> photos of a real build. It has NOT been officially confirmed by MrAlders0n. A test build
+> is planned to verify this in practice.**
 
 **What the code does:**
-- Drives GPIO 17 HIGH ("dh") to enable the USB connection (DFU device appears)
-- Drives GPIO 17 LOW ("dl") to disable the USB connection (normal operation)
-- Used during firmware flashing: the XIAO enters bootloader mode, then the USB relay
-  connects it to the Pi so it appears as a DFU programming device
+- Drives GPIO 17 HIGH ("dh") to enable the USB relay (connects VBUS during flashing)
+- Drives GPIO 17 LOW ("dl") to disable the USB relay (normal operation — VBUS cut)
+- The relay is NOT used for normal reboot/reset — that uses GPIO 4 only
+- During a firmware flash the relay stays ON for the entire DFU transfer, then turns OFF
 
-**Why this is needed:**
-After the XIAO enters bootloader mode via the reset pulse, it needs to re-enumerate
-on USB as a different device (the DFU bootloader). Cycling the USB connection forces
-the Pi to see it as a new device. Without this, the Pi may not detect the new DFU device.
+**Why this is needed — our current understanding:**
 
-**Hardware — this is NOT a direct pin connection:**
-GPIO 17 is only a control signal (3.3V, very low current). It cannot switch USB power (5V)
-directly. You need a circuit in between. Typical options:
+The Ikoka stick is powered externally (battery via BQ24074 charge controller), not from
+the Pi's USB 5V (VBUS). During normal operation, VBUS from the Pi is disconnected. The
+USB data lines (D+, D−, GND) remain connected, and the nRF52840 can communicate via
+USB serial (/dev/ttyACM0) using its own 3.3V power — no VBUS required for CDC serial.
 
-**Option A — Relay module (simplest to build):**
+When flashing firmware, the sequence is:
+1. GPIO 4 double-pulse triggers DFU/bootloader mode on the nRF52840
+2. GPIO 17 turns the relay ON → VBUS is connected → the chip detects host power and
+   re-enumerates as a DFU programming device
+3. `adafruit-nrfutil` flashes the firmware over the DFU USB connection
+4. GPIO 17 turns the relay OFF → VBUS disconnected → Ikoka returns to battery power
+
+**Physical wiring (from build photos):**
+
+The relay is wired using its **NO (normally open) and COM terminals** to interrupt the
+**red wire (VBUS / 5V)** on the USB cable between the Pi and the Ikoka stick. The data
+lines (D+, D−) and GND pass through uninterrupted.
+
 ```
+Pi USB port ──── D+, D−, GND ────────────────────────────► Ikoka USB
+                 VBUS (red) ──► Relay COM/NO ──────────────► Ikoka USB VBUS
+
 Pi GPIO 17 (Pin 11) ──► Relay module IN
-Pi 5V (Pin 2 or 4) ──► Relay module VCC
-Pi GND (Pin 6) ──────► Relay module GND
-                        Relay module COM/NO ──── USB VBUS (5V) to Ikoka
+Pi 5V (Pin 2 or 4)  ──► Relay module VCC
+Pi GND (Pin 6)      ──► Relay module GND
 ```
-Most relay modules have a built-in transistor driver and work directly from Pi GPIO.
-Choose a 5V relay module rated for the current draw of the XIAO (very low, <100mA).
 
-**Option B — MOSFET switch (cleaner, no mechanical relay):**
-A P-channel MOSFET (e.g., IRLML6402) with a small NPN transistor to invert the
-signal from GPIO 17. More compact but more components.
+Normal operation: relay off → NO open → VBUS cut → Ikoka on battery power
+Flashing:         relay on  → NO closed → VBUS connected → DFU enumeration
 
-**NEEDS CONFIRMATION:**
-- [ ] Does the Ikoka stick have a separate USB connection that can be switched, or is
-      its USB permanently connected to the Pi?
-**STATUS: Needs clarification from original developer (MrAlders0n)**
-
-Questions to ask:
-- What is the USB relay actually switching — VBUS power, a USB hub port, or something else?
-- Is the relay necessary, or does the XIAO re-enumerate automatically after bootloader entry?
-- What relay/switch component did you use, and how is it wired between the Pi GPIO and USB?
-- Is this feature applicable to the Ikoka stick, or is it specific to your hardware setup?
+**STATUS: Unconfirmed — awaiting official confirmation from MrAlders0n**
+- [ ] Confirm relay interrupts VBUS only (not full USB cable)
+- [ ] Confirm Ikoka is externally powered (battery) and does not rely on USB VBUS
+- [ ] Confirm DFU enumeration requires VBUS to be present
 
 ---
 
@@ -306,7 +313,6 @@ D10 ●  (MOSI)        ●
 
 ## Open Questions
 
-- [ ] Is the Ikoka stick's RESET pin exposed? (check with Ikoka documentation or physically inspect)
-- [ ] What connector/interface does the Ikoka stick use to connect to the Pi? (USB only? GPIO header?)
-- [ ] Does the XIAO re-enumerate as DFU automatically, or does USB relay switching help?
-- [ ] Are there any existing GPIO connections between the Ikoka stick and Pi in the current Ikoka design?
+- [ ] USB relay — awaiting official confirmation from MrAlders0n (see Note 2 for current theory)
+- [ ] Is the Ikoka stick's RESET pin exposed and accessible for direct wiring?
+- [ ] Are there any existing GPIO connections between the Ikoka stick and Pi in the Ikoka design?
