@@ -438,9 +438,54 @@ Open a browser and go to `http://PI_IP_ADDRESS:5000` — the dashboard should lo
 ## Updating RepeaterWatch
 
 When MrAlders0n releases updates to the original repo, here is how to pull them through
-to your Pi deployments.
+to your Pi deployments safely.
 
-### On your Mac (pull upstream changes):
+---
+
+### Step A — Back up the node before updating
+
+Always take a backup before deploying any update. This captures your config, database,
+and service files so you can restore the node to its previous working state if needed.
+
+SSH into the Pi and run:
+
+```bash
+BACKUP_DIR=~/backup-$(hostname)-$(date +%Y%m%d-%H%M%S)
+mkdir -p "$BACKUP_DIR"
+
+# Config and database
+sudo cp /opt/RepeaterWatch/.env "$BACKUP_DIR/repeaterwatch.env"
+sudo cp /opt/RepeaterWatch/meshcore.db "$BACKUP_DIR/meshcore.db" 2>/dev/null || echo "No database yet"
+
+# Service files (may have local customizations)
+sudo cp /etc/systemd/system/RepeaterWatch.service "$BACKUP_DIR/RepeaterWatch.service"
+sudo cp /etc/systemd/system/SerialMux.service "$BACKUP_DIR/SerialMux.service"
+
+# SerialMux script (contains the REAL_PORT setting)
+sudo cp /opt/SerialMux/SerialMux.py "$BACKUP_DIR/SerialMux.py"
+
+# Sudoers rule
+sudo cp /etc/sudoers.d/meshcoremon "$BACKUP_DIR/meshcoremon.sudoers"
+
+echo "Backup saved to $BACKUP_DIR"
+ls -lh "$BACKUP_DIR"
+```
+
+This creates a timestamped folder in the home directory of whichever user you are logged
+in as (e.g. `/home/claude/backup-meshcore-site2-20260311-1430/`).
+
+**Optionally copy the backup to your Mac** for safe keeping:
+
+```bash
+# Run this on your Mac (replace PI_IP and username as needed)
+scp -i ~/.ssh/YOUR_SSH_KEY -r \
+  claude@PI_IP:~/backup-* \
+  ~/backups/
+```
+
+---
+
+### Step B — Pull the update on your Mac
 
 ```bash
 git fetch upstream
@@ -452,27 +497,84 @@ git push origin main
 them to your GitHub fork. If there are any conflicts Git will tell you — ask Claude Code
 to help resolve them.
 
-### On each Pi (deploy the update):
+---
+
+### Step C — Deploy to the Pi
 
 From your Mac, run the same rsync command used during install:
 
 ```bash
 rsync -av --exclude='.git' --exclude='venv' --exclude='*.pyc' \
   --exclude='__pycache__' --exclude='*.db' --exclude='.env' \
-  /path/to/RepeaterWatch/ user@PI_IP:/opt/RepeaterWatch/
+  /path/to/RepeaterWatch/ claude@PI_IP:/tmp/RepeaterWatch/
+ssh -i ~/.ssh/YOUR_SSH_KEY claude@PI_IP \
+  "sudo cp -r /tmp/RepeaterWatch/. /opt/RepeaterWatch/"
 ```
 
 Then restart the service:
 
 ```bash
-ssh user@PI_IP "sudo systemctl restart RepeaterWatch"
+ssh -i ~/.ssh/YOUR_SSH_KEY claude@PI_IP \
+  "sudo systemctl restart RepeaterWatch"
 ```
 
 The `.env` file and SQLite database are excluded from rsync and will not be affected.
 The venv is also excluded — if `requirements.txt` changed in the update, re-run:
 
 ```bash
-ssh user@PI_IP "sudo /opt/RepeaterWatch/venv/bin/pip install -r /opt/RepeaterWatch/requirements.txt"
+ssh -i ~/.ssh/YOUR_SSH_KEY claude@PI_IP \
+  "sudo /opt/RepeaterWatch/venv/bin/pip install -r /opt/RepeaterWatch/requirements.txt"
+```
+
+---
+
+### Step D — Verify the update
+
+Check the service started cleanly:
+
+```bash
+ssh -i ~/.ssh/YOUR_SSH_KEY claude@PI_IP \
+  "sudo systemctl status RepeaterWatch --no-pager && sudo journalctl -u RepeaterWatch -n 20 --no-pager"
+```
+
+Open the dashboard in a browser and confirm it loads and data is flowing.
+
+---
+
+### If something goes wrong — restoring from backup
+
+If the update breaks something, restore from the backup you took in Step A.
+
+SSH into the Pi:
+
+```bash
+# Stop the service
+sudo systemctl stop RepeaterWatch
+
+# Restore config (database is unchanged since rsync excludes it)
+sudo cp ~/backup-<HOSTNAME>-<TIMESTAMP>/repeaterwatch.env /opt/RepeaterWatch/.env
+
+# Restore service files if they were changed
+sudo cp ~/backup-<HOSTNAME>-<TIMESTAMP>/RepeaterWatch.service /etc/systemd/system/RepeaterWatch.service
+sudo cp ~/backup-<HOSTNAME>-<TIMESTAMP>/SerialMux.service /etc/systemd/system/SerialMux.service
+sudo systemctl daemon-reload
+
+# Roll back the RepeaterWatch code using rsync from your Mac
+# (first do: git checkout <previous-commit> on your Mac, rsync, then git checkout main)
+
+# Restart
+sudo systemctl start RepeaterWatch
+sudo systemctl status RepeaterWatch --no-pager
+```
+
+To find the previous commit hash on your Mac:
+
+```bash
+git log --oneline -10
+# Copy the hash of the last known-good commit, then:
+git checkout <hash>
+# rsync to the Pi as normal, then:
+git checkout main
 ```
 
 ---
