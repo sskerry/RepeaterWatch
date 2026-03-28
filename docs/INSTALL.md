@@ -253,6 +253,22 @@ Verify it works:
 /opt/RepeaterWatch/venv/bin/python3 -c 'import lgpio; print("lgpio OK")'
 ```
 
+### 5e. Symlink adafruit-nrfutil into the system PATH
+
+`adafruit-nrfutil` is used for flashing nRF52-based firmware over USB. It is installed inside
+the venv by `requirements.txt`, but the firmware flash process runs it as a system command,
+so it needs to be reachable in `/usr/local/bin`:
+
+```bash
+sudo ln -sf /opt/RepeaterWatch/venv/bin/adafruit-nrfutil /usr/local/bin/adafruit-nrfutil
+```
+
+Verify:
+
+```bash
+adafruit-nrfutil version
+```
+
 ---
 
 ## Step 6 — Create the .env configuration file
