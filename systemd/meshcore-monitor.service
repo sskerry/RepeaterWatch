@@ -1,6 +1,9 @@
 [Unit]
 Description=RepeaterWatch
-After=network.target
+After=network.target SerialMux.service
+# Wants= (not Requires=) so that stopping SerialMux does NOT stop RepeaterWatch.
+# This is important: the firmware flash feature stops SerialMux intentionally.
+Wants=SerialMux.service
 
 [Service]
 Type=simple

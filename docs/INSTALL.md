@@ -335,7 +335,8 @@ Paste in:
 [Unit]
 Description=RepeaterWatch
 After=network.target SerialMux.service
-Requires=SerialMux.service
+# Use Wants= not Requires= — so stopping SerialMux (e.g. during firmware flash) does NOT stop RepeaterWatch
+Wants=SerialMux.service
 
 [Service]
 Type=simple
