@@ -2,7 +2,7 @@
 
 **Owner:** MYCALL (representing CLUB1 and CLUB2)
 **Hardware target:** Raspberry Pi 4 + Ikoka stick MeshCore device
-**Last updated:** 2026-03-11
+**Last updated:** 2026-03-28
 
 ---
 
@@ -22,15 +22,36 @@
 
 ## Current Focus
 
-**Goal 3 (expanded) — Second deployment: meshcore-site2 (CM3 at PI_IP)**
+**Goal 3 (expanded) — Firmware flash pipeline working; meshcore-site2 awaiting radio**
 
-meshcore-site2 is fully installed and dashboard is live. No radio connected yet.
-Next steps: connect radio, update SerialMux port, install and configure mctomqtt,
-then switch service file from `Wants=` to `Requires=` for SerialMux dependency.
+The firmware flash pipeline on the home Pi is fully operational — the hardware sequence
+(bootloader GPIO trigger, USB relay, DFU enumeration) works end to end. `adafruit-nrfutil`
+is now installed on both Pis. Next step: retry a full firmware flash on the home Pi to
+confirm the complete cycle. meshcore-site2 still awaits radio hardware.
 
 ---
 
 ## Session Notes
+
+### Session 6 — 2026-03-28
+
+**Firmware flash crash investigation and fix:**
+- Firmware update attempt caused RepeaterWatch to crash mid-flash
+- Root cause: `Requires=SerialMux.service` in the systemd service file — when the flash process stopped SerialMux, systemd killed RepeaterWatch too (hard dependency cascades both ways)
+- Fixed on home Pi: changed to `Wants=SerialMux.service`, reloaded systemd, restarted service
+- Fixed in repo: updated `systemd/meshcore-monitor.service` template and `docs/INSTALL.md` — both now use `Wants=` with a comment explaining why
+- **`Wants=` is the correct permanent setting** — the firmware flash intentionally stops SerialMux, so `Requires=` must never be used
+
+**adafruit-nrfutil installed on both Pis:**
+- After the crash fix, the flash ran all the way to the flashing step — failed only because `adafruit-nrfutil` was missing
+- Installed in the venv (`pip install adafruit-nrfutil`) and symlinked to `/usr/local/bin` on both Pis
+- Added to `requirements.txt` with symlink note; added Step 5e to `docs/INSTALL.md`
+- Confirmed DFU device enumerates correctly as `usb-Seeed_XIAO_nRF52840_Sense_...-if00` in bootloader mode — the code's wildcard fallback handles this correctly
+
+**Both Pis synced and firmware-flash-ready:**
+- meshcore-site2 already had `Wants=` set correctly — no service file change needed there
+- Deployed updated code to meshcore-site2 via rsync; installed adafruit-nrfutil; restarted service
+- Next step: retry a full firmware flash on the home Pi to confirm end-to-end success
 
 ### Session 5 — 2026-03-11
 
@@ -132,7 +153,7 @@ then switch service file from `Wants=` to `Requires=` for SerialMux dependency.
 | 2026-03-07 | Store Claude SSH key in Nextcloud | Allows Claude Code access from any Mac without re-setup |
 | 2026-03-08 | Run SerialMux as root | Needs to create /dev symlinks; standard for hardware daemons |
 | 2026-03-08 | Disable auth (comment out MESHCORE_PASSWORD) | Home Pi is on a trusted local network |
-| 2026-03-11 | Use `Wants=` instead of `Requires=` for SerialMux in service file | Allows RepeaterWatch to start when no radio is connected; change to `Requires=` once radio is present |
+| 2026-03-11 | Use `Wants=` instead of `Requires=` for SerialMux in service file | Allows RepeaterWatch to start with no radio; also required permanently — firmware flash stops SerialMux intentionally, so `Requires=` would crash RepeaterWatch mid-flash |
 | 2026-03-11 | Use same SSH key (`YOUR_SSH_KEY`) for all Pi installs | Simplifies access — one key works everywhere |
 | 2026-03-11 | Recommend 64-bit OS for all Pi deployments | Matches home Pi exactly, avoids architecture differences in lgpio symlinks and pip builds |
 
@@ -162,9 +183,12 @@ then switch service file from `Wants=` to `Requires=` for SerialMux dependency.
 - [x] Python venv created, dependencies installed, lgpio symlinked
 - [x] `/etc/sudoers.d/meshcoremon` created
 - [x] `.env` file configured (ttyV0, sensor poll off, auth disabled)
-- [x] `meshcore-monitor` systemd service installed, enabled, running
+- [x] `meshcore-monitor` systemd service installed, enabled, running (`Wants=SerialMux`)
 - [x] Dashboard live at http://PI_IP:5000 — reading real device data
+- [x] `adafruit-nrfutil` installed and symlinked to `/usr/local/bin`
+- [x] Firmware flash pipeline tested — hardware sequence works end-to-end
 - [ ] Wire GPIO 4 → Ikoka RESET pin and test remote reset from dashboard
+- [ ] Retry full firmware flash (adafruit-nrfutil now installed — should complete)
 - [ ] Write up full install process as `docs/INSTALL.md`
 
 ---
@@ -180,13 +204,14 @@ then switch service file from `Wants=` to `Requires=` for SerialMux dependency.
 - [x] Python venv created, dependencies installed, lgpio symlinked
 - [x] `/etc/sudoers.d/meshcoremon` created
 - [x] `.env` file configured (ttyV0, sensor poll off, auth disabled)
-- [x] `RepeaterWatch` systemd service installed, enabled, running (`Wants=SerialMux`)
+- [x] `RepeaterWatch` systemd service installed, enabled, running (`Wants=SerialMux` — permanent)
 - [x] Dashboard live at http://PI_IP:5000
+- [x] `adafruit-nrfutil` installed and symlinked to `/usr/local/bin`
+- [x] Code synced to latest (2026-03-28 session)
 - [ ] Connect radio (Ikoka stick)
 - [ ] Update SerialMux `REAL_PORT` to actual by-id path
 - [ ] Update `.env` `MESHCORE_FLASH_SERIAL_PORT` to actual by-id path
 - [ ] Install and configure mctomqtt
-- [ ] Change service file from `Wants=` to `Requires=SerialMux`
 - [ ] Wire GPIO 4 → Ikoka RESET pin
 - [ ] Assign permanent IP, update records
 
