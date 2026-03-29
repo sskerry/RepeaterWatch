@@ -22,12 +22,12 @@
 
 ## Current Focus
 
-**Goal 3 (expanded) — Firmware flash pipeline working; meshcore-site2 awaiting radio**
+**Both Pis on latest code; firmware flash ready to complete; meshcore-site2 awaiting radio**
 
-The firmware flash pipeline on the home Pi is fully operational — the hardware sequence
-(bootloader GPIO trigger, USB relay, DFU enumeration) works end to end. `adafruit-nrfutil`
-is now installed on both Pis. Next step: retry a full firmware flash on the home Pi to
-confirm the complete cycle. meshcore-site2 still awaits radio hardware.
+Upstream merged (9 commits), both Pis updated and running. Disk space on home Pi cleaned up
+(77% used). The firmware flash pipeline is fully ready — all tools installed, hardware sequence
+confirmed. Next step: retry a full firmware flash on the home Pi. meshcore-site2 still awaits
+radio hardware. jjkroell UX fork noted for future consideration.
 
 ---
 
@@ -52,6 +52,25 @@ confirm the complete cycle. meshcore-site2 still awaits radio hardware.
 - meshcore-site2 already had `Wants=` set correctly — no service file change needed there
 - Deployed updated code to meshcore-site2 via rsync; installed adafruit-nrfutil; restarted service
 - Next step: retry a full firmware flash on the home Pi to confirm end-to-end success
+
+**Disk space investigation and cleanup (home Pi — meshcore-site1):**
+- Root filesystem was at 91% full (5.8 GB / 6.8 GB) on an 8 GB SD card
+- Root cause: full desktop Raspberry Pi OS installed — Chromium (440 MB) and Firefox (250 MB) sitting unused on a headless server
+- Also found: `/opt/mctomqtt/.nvm` (231 MB Node.js runtime, required), `/var/cache/apt` (137 MB, cleared), `/root/.cache/pip` (11 MB, cleared)
+- Removed: Chromium, Firefox, rpd-wallpaper, pocketsphinx, plus orphaned packages via `apt autoremove`
+- Result: 91% → 77% used, 607 MB → 1.5 GB free
+- Note: 8 GB card is fundamentally small for this stack; larger card recommended before site deployment
+
+**Upstream merge — 9 new commits from MrAlders0n/RepeaterWatch:**
+- Clean merge, no conflicts (upstream didn't touch our added files)
+- New features: noise floor rolling average on RF Signal graph, filters bogus 0 dBm AGC spikes, improved AS3935 lightning false-positive filtering, "delete old neighbours" button in Settings
+- Admin page change: Tools and Settings tabs now require login; main dashboard stays public (no visible change while auth is disabled)
+- Deployed to both Pis
+
+**jjkroell/Repeater-Watch fork (VE7KOD) reviewed:**
+- Has notable UX improvements: dark/light mode, mobile-responsive layout, better typography, sensor management modal
+- Cannot be git-merged (no shared history with our tree); would need targeted manual implementation
+- Noted for future consideration — hold until deployment is stable
 
 ### Session 5 — 2026-03-11
 
@@ -166,6 +185,7 @@ confirm the complete cycle. meshcore-site2 still awaits radio hardware.
 - USB relay circuit (GPIO 17): working theory documented (VBUS-only, NO/COM) — awaiting official confirmation from MrAlders0n; test build planned
 - meshcore-site2: what will the permanent IP be once assigned?
 - meshcore-site2: mctomqtt credentials and config — needed when radio is connected
+- Home Pi SD card is 8 GB (77% used after cleanup) — consider upgrading to 32 GB before site deployment
 
 ---
 
