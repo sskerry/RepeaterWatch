@@ -372,12 +372,33 @@
             }, 50);
             refreshSensors();
             stopServicesRefresh();
-        } else if (tabId === 'tools') {
+        } else if (tabId === 'admin') {
             startServicesRefresh();
             refreshBq24074Tool();
-        } else if (tabId === 'settings') {
-            stopServicesRefresh();
         }
+        // Update admin header button active state
+        var adminBtn = document.getElementById('admin-btn');
+        if (adminBtn) {
+            adminBtn.classList.toggle('active', tabId === 'admin');
+        }
+    }
+
+    function activateAdminTab() {
+        var adminPanel = document.getElementById('tab-admin');
+        if (!adminPanel) return;
+        document.querySelectorAll('.tab-btn').forEach(function (b) { b.classList.remove('active'); });
+        document.querySelectorAll('.tab-panel').forEach(function (p) { p.classList.remove('active'); });
+        adminPanel.classList.add('active');
+        activeTab = 'admin';
+        onTabActivated('admin');
+    }
+
+    function setupAdminButton() {
+        var btn = document.getElementById('admin-btn');
+        if (!btn) return;
+        btn.addEventListener('click', function () {
+            activateAdminTab();
+        });
     }
 
     // ── API Fetchers ─────────────────────────────────────
@@ -1029,7 +1050,7 @@
     var terminalConnected = false;
 
     function setupTerminal() {
-        var modeBtns = document.querySelectorAll('.terminal-mode-btn');
+        var modeBtns = document.querySelectorAll('.terminal-mode-btn[data-mode]');
         var connectBtn = document.getElementById('terminal-connect-btn');
 
         modeBtns.forEach(function (btn) {
@@ -1055,7 +1076,7 @@
         var termEl = document.getElementById('xterm-terminal');
         var connectBtn = document.getElementById('terminal-connect-btn');
         var statusEl = document.getElementById('terminal-status');
-        var modeBtns = document.querySelectorAll('.terminal-mode-btn');
+        var modeBtns = document.querySelectorAll('.terminal-mode-btn[data-mode]');
 
         container.style.display = 'block';
 
@@ -1261,6 +1282,50 @@
             });
         });
 
+        // Neighbour purge handler
+        var neighborPurgeBtn = document.getElementById('neighbor-purge-btn');
+        var neighborPurgeStatus = document.getElementById('neighbor-purge-status');
+        var neighborAgeInput = document.getElementById('neighbor-age-hours');
+
+        neighborPurgeBtn.addEventListener('click', function () {
+            var hours = parseInt(neighborAgeInput.value, 10);
+            if (!hours || hours < 1) {
+                neighborPurgeStatus.textContent = 'Enter a valid number of hours';
+                neighborPurgeStatus.className = 'settings-save-status error';
+                setTimeout(function () { neighborPurgeStatus.textContent = ''; }, 3000);
+                return;
+            }
+            if (!confirm('Delete all neighbours not heard from in the last ' + hours + ' hours?')) return;
+
+            neighborPurgeBtn.disabled = true;
+            neighborPurgeStatus.textContent = 'Deleting...';
+            neighborPurgeStatus.className = 'settings-save-status';
+
+            fetch('/api/v1/neighbors/purge', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ hours: hours }),
+            })
+            .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, data: d }; }); })
+            .then(function (resp) {
+                neighborPurgeBtn.disabled = false;
+                if (resp.ok) {
+                    neighborPurgeStatus.textContent = 'Deleted ' + resp.data.deleted + ' neighbour(s)';
+                    neighborPurgeStatus.className = 'settings-save-status success';
+                } else {
+                    neighborPurgeStatus.textContent = resp.data.error || 'Delete failed';
+                    neighborPurgeStatus.className = 'settings-save-status error';
+                }
+                setTimeout(function () { neighborPurgeStatus.textContent = ''; }, 5000);
+            })
+            .catch(function () {
+                neighborPurgeBtn.disabled = false;
+                neighborPurgeStatus.textContent = 'Network error';
+                neighborPurgeStatus.className = 'settings-save-status error';
+                setTimeout(function () { neighborPurgeStatus.textContent = ''; }, 3000);
+            });
+        });
+
         // Database reset handler
         var dbResetBtn = document.getElementById('db-reset-btn');
         var dbStatusEl = document.getElementById('db-reset-status');
@@ -1298,6 +1363,7 @@
     }
 
     function populateSettingsForm(settings) {
+        if (!document.getElementById('tab-admin')) return;
         var sourceBtns = document.querySelectorAll('[data-setting="power_source"]');
         var channelSection = document.getElementById('ina-channel-settings');
         var solarSelect = document.getElementById('ina-solar-ch');
@@ -1358,13 +1424,24 @@
     setupSensorTimeButtons();
     setupThemeToggle();
     setupMapFullscreen();
-    setupFirmwareFlash();
-    setupRebootRadio();
-    setupUsbRelay();
-    setupServices();
-    setupBq24074Tool();
-    setupTerminal();
-    setupSettings();
+    setupAdminButton();
+
+    if (document.getElementById('tab-admin')) {
+        setupFirmwareFlash();
+        setupRebootRadio();
+        setupUsbRelay();
+        setupServices();
+        setupBq24074Tool();
+        setupTerminal();
+        setupSettings();
+    }
+
+    // Check URL for initial tab (e.g. after login redirect)
+    var urlParams = new URLSearchParams(window.location.search);
+    var initialTab = urlParams.get('tab');
+    if (initialTab === 'admin' && document.getElementById('tab-admin')) {
+        activateAdminTab();
+    }
 
     // Load settings first, then do initial refresh
     loadSettings().then(function () {
