@@ -24,6 +24,33 @@ Ikoka Stick (hardware)
 
 ---
 
+## Connection Modes: USB vs Serial (UART)
+
+The Ikoka stick can connect to the Pi in two different ways, depending on which firmware
+is flashed to the stick:
+
+| | USB Mode (default) | Serial / UART Mode |
+|---|---|---|
+| **Firmware** | Standard MeshCore firmware | RS232 firmware (`feature/console-serial1` branch) |
+| **Physical connection** | USB cable only | USB cable (power) + UART wires (Pi pins 8, 10, GND) |
+| **Pi serial device** | `/dev/ttyACM0` via `/dev/serial/by-id/...` | `/dev/ttyAMA0` (Pi hardware UART) |
+| **SerialMux REAL_PORT** | USB by-id path | `/dev/ttyAMA0` |
+| **USB relay (GPIO 17)** | Not compatible — cutting VBUS kills serial | Supported — serial stays on UART |
+| **Kernel config needed** | None | Remove serial console, handle Bluetooth |
+| **Reboot required** | No | Yes (after kernel config changes) |
+
+The `install.sh` script asks which mode you're using and configures everything automatically.
+
+**If you're unsure, choose USB mode** — it's the default and works with standard firmware.
+
+For serial/UART mode, see `docs/gpio-wiring.md` (Note 6) for the physical wiring details.
+The Pi's UART port (`/dev/ttyAMA0`) can be claimed by three things that must be dealt with:
+1. **Kernel serial console** — sends boot messages to the UART (removed from `cmdline.txt`)
+2. **serial-getty** — runs a login prompt on the UART (disabled via systemd)
+3. **Bluetooth** — on Pi 3/4/Zero W, Bluetooth uses `/dev/ttyAMA0` by default (moved to mini-UART or disabled)
+
+---
+
 ## Prerequisites
 
 - Raspberry Pi 4 with Debian 13 (trixie) installed and SSH enabled
@@ -35,6 +62,8 @@ Ikoka Stick (hardware)
 ---
 
 ## Step 1 — Find the Ikoka stick's serial port
+
+### USB Mode
 
 Plug in the Ikoka stick and run:
 
@@ -54,6 +83,57 @@ Your device ID (the hex string) will be different — use whatever yours shows.
 
 The stick also appears as `/dev/ttyACM0` but use the full `/dev/serial/by-id/` path in configs
 because it stays consistent even if USB devices are added or removed.
+
+### Serial (UART) Mode
+
+If your stick runs the RS232 firmware, the serial console uses the Pi's hardware UART instead
+of USB. The serial port is `/dev/ttyAMA0` — you don't need to look anything up.
+
+However, you must first free the UART from other services that claim it by default:
+
+**1. Enable UART and remove kernel console:**
+
+```bash
+# Ensure UART is enabled
+grep -q "^enable_uart=1" /boot/firmware/config.txt || echo "enable_uart=1" | sudo tee -a /boot/firmware/config.txt
+
+# Remove kernel serial console (back up first)
+sudo cp /boot/firmware/cmdline.txt /boot/firmware/cmdline.txt.bak
+sudo sed -i 's/console=serial0,[0-9]* //' /boot/firmware/cmdline.txt
+```
+
+**2. Disable serial-getty (login prompt on UART):**
+
+```bash
+sudo systemctl stop serial-getty@ttyAMA0.service
+sudo systemctl disable serial-getty@ttyAMA0.service
+```
+
+**3. Free the UART from Bluetooth (Pi 3/4/Zero W):**
+
+On these models, Bluetooth uses `/dev/ttyAMA0` by default. Choose one:
+
+```bash
+# Option A: Move Bluetooth to mini-UART (BT still works, recommended)
+echo "dtoverlay=miniuart-bt" | sudo tee -a /boot/firmware/config.txt
+
+# Option B: Disable Bluetooth entirely
+echo "dtoverlay=disable-bt" | sudo tee -a /boot/firmware/config.txt
+sudo systemctl disable hciuart.service
+```
+
+**4. Reboot** for all kernel changes to take effect:
+
+```bash
+sudo reboot
+```
+
+After reboot, verify the UART is available:
+
+```bash
+ls -la /dev/ttyAMA0
+# Should show: crw-rw---- ... root dialout ... /dev/ttyAMA0
+```
 
 ---
 
@@ -80,13 +160,19 @@ Open the file and update the `REAL_PORT` line near the top:
 sudo nano /opt/SerialMux/SerialMux.py
 ```
 
-Change this line to match your device's full by-id path from Step 1:
+**USB mode** — change this line to match your device's full by-id path from Step 1:
 
 ```python
 REAL_PORT = '/dev/serial/by-id/usb-Seeed_Studio_XIAO_nRF52840_YOUR_ID_HERE-if00'
 ```
 
-Leave `BAUD = 115200` and `VPORTS` unchanged.
+**Serial (UART) mode** — point to the Pi's hardware UART instead:
+
+```python
+REAL_PORT = '/dev/ttyAMA0'
+```
+
+Leave `BAUD = 115200` and `VPORTS` unchanged for both modes.
 
 ### 2c. Create a Python virtual environment and install pyserial
 
@@ -286,7 +372,13 @@ Paste in the following, updating the values marked with `# ← CHANGE THIS`:
 # Secret key — generate with: python3 -c 'import secrets; print(secrets.token_hex(32))'
 MESHCORE_SECRET_KEY=PASTE_GENERATED_KEY_HERE   # ← CHANGE THIS
 
+# Connection mode: "usb" or "serial"
+# usb    = standard firmware, Ikoka connected via USB cable
+# serial = RS232 firmware, Ikoka connected via Pi UART pins 8/10
+MESHCORE_CONNECTION_MODE=usb
+
 # Serial port — RepeaterWatch uses SerialMux virtual port 0
+# (same for both connection modes — SerialMux handles the difference)
 MESHCORE_SERIAL_PORT=/dev/ttyV0
 MESHCORE_SERIAL_BAUD=115200
 MESHCORE_SERIAL_TIMEOUT=5
@@ -419,8 +511,19 @@ Open a browser and go to `http://PI_IP_ADDRESS:5000` — the dashboard should lo
 ### "No data" or device not found
 - Check SerialMux is running: `sudo systemctl status SerialMux`
 - Verify virtual ports exist: `ls /dev/ttyV*`
+- Check the `REAL_PORT` in `/opt/SerialMux/SerialMux.py` matches your connection mode
+
+**USB mode:**
 - Verify Ikoka stick is plugged in: `ls /dev/serial/by-id/`
-- Check the `REAL_PORT` in `/opt/SerialMux/SerialMux.py` matches your device
+- Check the USB device is enumerated: `lsusb | grep -i seeed`
+
+**Serial (UART) mode:**
+- Verify UART is available: `ls -la /dev/ttyAMA0`
+- Check kernel console is disabled: `cat /boot/firmware/cmdline.txt` (should NOT contain `console=serial0`)
+- Check serial-getty is disabled: `systemctl is-active serial-getty@ttyAMA0.service` (should say "inactive")
+- Check Bluetooth isn't claiming the UART: `grep -E 'miniuart-bt|disable-bt' /boot/firmware/config.txt`
+- Verify UART wiring: Pi TX (Pin 8) → XIAO RX, Pi RX (Pin 10) → XIAO TX, GND connected
+- Did you reboot after making kernel config changes?
 
 ### mctomqtt fails after reconfiguring
 - Confirm `/etc/mctomqtt/config.d/00-user.toml` has `ports = ["/dev/ttyV1"]`
@@ -598,8 +701,9 @@ git checkout main
 
 ## After Installation
 
-- **GPIO reset wiring:** See `docs/gpio-wiring.md` for connecting the Pi GPIO 4 pin to the
-  Ikoka stick's RESET pad. This enables the remote reset and firmware flash features.
+- **GPIO wiring:** See `docs/gpio-wiring.md` for connecting the Pi GPIO 4 pin to the
+  Ikoka stick's RESET pad (enables remote reset and firmware flash), and for UART serial
+  wiring details if using the RS232 firmware (Note 6).
 - **Set a password:** To enable login protection, uncomment and set `MESHCORE_PASSWORD=` in `.env`
   then restart the service.
 - **Customization:** Node name, branding, and club-specific fields can be changed without

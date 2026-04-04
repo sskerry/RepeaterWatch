@@ -40,44 +40,69 @@ echo ""
 header "Configuration"
 echo -e "  Before installing, we need a few details.\n"
 
-# --- Serial port (auto-detect) ---
-echo -e "  ${BOLD}Step 1/4 — Physical serial port${NC}\n"
+# --- Connection mode ---
+echo -e "  ${BOLD}Step 1/5 — Connection mode${NC}\n"
+info "How is the Ikoka stick connected to this Pi?"
+echo ""
+echo -e "    ${BOLD}1${NC}) USB     — standard USB cable (default, most common)"
+echo -e "    ${BOLD}2${NC}) Serial  — UART wiring to Pi GPIO pins 8/10 (RS232 firmware)"
+echo ""
+echo -en "${CYAN}?${NC}  Select [1]: "; read -r CONN_MODE_CHOICE </dev/tty
+CONN_MODE_CHOICE="${CONN_MODE_CHOICE:-1}"
 
-mapfile -t USB_DEVICES < <(ls /dev/serial/by-id/ 2>/dev/null || true)
+case "$CONN_MODE_CHOICE" in
+    1) CONN_MODE="usb" ;;
+    2) CONN_MODE="serial" ;;
+    *) err "Invalid selection."; exit 1 ;;
+esac
+ok "Connection mode: $CONN_MODE"
+echo ""
 
-if [[ ${#USB_DEVICES[@]} -eq 1 ]]; then
-    SERIAL_PORT="/dev/serial/by-id/${USB_DEVICES[0]}"
-    ok "Auto-detected: $SERIAL_PORT"
-elif [[ ${#USB_DEVICES[@]} -gt 1 ]]; then
-    info "Multiple USB serial devices detected:"
-    for i in "${!USB_DEVICES[@]}"; do
-        echo -e "    ${BOLD}$((i+1))${NC}) /dev/serial/by-id/${USB_DEVICES[$i]}"
-    done
-    echo ""
-    echo -en "${CYAN}?${NC}  Select device number [1]: "; read -r SEL </dev/tty
-    SEL="${SEL:-1}"
-    if [[ "$SEL" =~ ^[0-9]+$ ]] && (( SEL >= 1 && SEL <= ${#USB_DEVICES[@]} )); then
-        SERIAL_PORT="/dev/serial/by-id/${USB_DEVICES[$((SEL-1))]}"
-        ok "Selected: $SERIAL_PORT"
+# --- Serial port (depends on connection mode) ---
+if [[ "$CONN_MODE" == "usb" ]]; then
+    echo -e "  ${BOLD}Step 2/5 — Physical serial port${NC}\n"
+
+    mapfile -t USB_DEVICES < <(ls /dev/serial/by-id/ 2>/dev/null || true)
+
+    if [[ ${#USB_DEVICES[@]} -eq 1 ]]; then
+        SERIAL_PORT="/dev/serial/by-id/${USB_DEVICES[0]}"
+        ok "Auto-detected: $SERIAL_PORT"
+    elif [[ ${#USB_DEVICES[@]} -gt 1 ]]; then
+        info "Multiple USB serial devices detected:"
+        for i in "${!USB_DEVICES[@]}"; do
+            echo -e "    ${BOLD}$((i+1))${NC}) /dev/serial/by-id/${USB_DEVICES[$i]}"
+        done
+        echo ""
+        echo -en "${CYAN}?${NC}  Select device number [1]: "; read -r SEL </dev/tty
+        SEL="${SEL:-1}"
+        if [[ "$SEL" =~ ^[0-9]+$ ]] && (( SEL >= 1 && SEL <= ${#USB_DEVICES[@]} )); then
+            SERIAL_PORT="/dev/serial/by-id/${USB_DEVICES[$((SEL-1))]}"
+            ok "Selected: $SERIAL_PORT"
+        else
+            err "Invalid selection."
+            exit 1
+        fi
     else
-        err "Invalid selection."
-        exit 1
+        warn "No USB serial devices detected."
+        info "Enter the path manually (e.g. /dev/ttyUSB0)."
+        echo ""
+        echo -en "${CYAN}?${NC}  Serial port: "; read -r SERIAL_PORT </dev/tty
+        if [[ -z "$SERIAL_PORT" ]]; then
+            err "Serial port is required."
+            exit 1
+        fi
+        ok "Serial port: $SERIAL_PORT"
     fi
 else
-    warn "No USB serial devices detected."
-    info "Enter the path manually (e.g. /dev/ttyUSB0)."
-    echo ""
-    echo -en "${CYAN}?${NC}  Serial port: "; read -r SERIAL_PORT </dev/tty
-    if [[ -z "$SERIAL_PORT" ]]; then
-        err "Serial port is required."
-        exit 1
-    fi
-    ok "Serial port: $SERIAL_PORT"
+    echo -e "  ${BOLD}Step 2/5 — Serial UART port${NC}\n"
+    SERIAL_PORT="/dev/ttyAMA0"
+    ok "Using Pi hardware UART: $SERIAL_PORT"
+    info "Make sure UART wiring is connected: Pi TX (Pin 8) → XIAO RX, Pi RX (Pin 10) → XIAO TX, GND"
 fi
 echo ""
 
 # --- Hardware name ---
-echo -e "  ${BOLD}Step 2/4 — Hardware name${NC}\n"
+echo -e "  ${BOLD}Step 3/5 — Hardware name${NC}\n"
 info "Name or description of this node's radio hardware."
 info "Examples: Heltec T114, RAK 4631, Ikoka Stick 30dB"
 echo ""
@@ -87,7 +112,7 @@ ok "Hardware: $HARDWARE_NAME"
 echo ""
 
 # --- RepeaterWatch web port ---
-echo -e "  ${BOLD}Step 3/4 — RepeaterWatch web port${NC}\n"
+echo -e "  ${BOLD}Step 4/5 — RepeaterWatch web port${NC}\n"
 info "Port the dashboard will listen on (default: 5000)."
 echo -en "${CYAN}?${NC}  Web port [5000]: "; read -r RW_PORT_RAW </dev/tty
 RW_PORT="${RW_PORT_RAW:-5000}"
@@ -95,7 +120,7 @@ ok "Web port: $RW_PORT"
 echo ""
 
 # --- RepeaterWatch git repo ---
-echo -e "  ${BOLD}Step 4/4 — RepeaterWatch Git repository${NC}\n"
+echo -e "  ${BOLD}Step 5/5 — RepeaterWatch Git repository${NC}\n"
 info "Which RepeaterWatch repo to clone?"
 echo ""
 echo -e "    ${BOLD}1${NC}) MrAlders0n/RepeaterWatch  (upstream original)"
@@ -151,6 +176,87 @@ if ! grep -q "^dtparam=i2c_arm=on" /boot/firmware/config.txt 2>/dev/null \
         echo "dtparam=i2c_arm=on" >> "$BOOT_CONFIG"
         ok "I2C enabled in $BOOT_CONFIG (takes effect after reboot)."
     fi
+fi
+
+# ── Step 1b: UART kernel config (serial mode only) ──────────────────────────
+if [[ "$CONN_MODE" == "serial" ]]; then
+    header "Step 1b — UART Kernel Configuration"
+
+    NEEDS_REBOOT=0
+
+    # Ensure UART is enabled in boot config
+    BOOT_CONFIG="/boot/firmware/config.txt"
+    [[ ! -f "$BOOT_CONFIG" ]] && BOOT_CONFIG="/boot/config.txt"
+
+    if ! grep -q "^enable_uart=1" "$BOOT_CONFIG" 2>/dev/null; then
+        echo "enable_uart=1" >> "$BOOT_CONFIG"
+        ok "UART enabled in $BOOT_CONFIG"
+        NEEDS_REBOOT=1
+    else
+        ok "UART already enabled in $BOOT_CONFIG"
+    fi
+
+    # Remove kernel serial console so Linux doesn't claim /dev/ttyAMA0
+    CMDLINE="/boot/firmware/cmdline.txt"
+    [[ ! -f "$CMDLINE" ]] && CMDLINE="/boot/cmdline.txt"
+
+    if grep -q "console=serial0" "$CMDLINE" 2>/dev/null; then
+        cp "$CMDLINE" "${CMDLINE}.bak"
+        sed -i 's/console=serial0,[0-9]* //' "$CMDLINE"
+        ok "Kernel serial console removed from $CMDLINE (backup: ${CMDLINE}.bak)"
+        NEEDS_REBOOT=1
+    else
+        ok "Kernel serial console already disabled."
+    fi
+
+    # Disable serial-getty on ttyAMA0 if active (login prompt would steal the port)
+    if systemctl is-enabled serial-getty@ttyAMA0.service &>/dev/null; then
+        systemctl stop serial-getty@ttyAMA0.service 2>/dev/null || true
+        systemctl disable serial-getty@ttyAMA0.service 2>/dev/null || true
+        ok "Disabled serial-getty on ttyAMA0 (was claiming the UART for login)."
+    else
+        ok "serial-getty on ttyAMA0 already disabled."
+    fi
+
+    # On Pi 3/4/Zero W, Bluetooth uses ttyAMA0 by default — move BT to mini-UART
+    # so we can use ttyAMA0 for MeshCore. This adds a dtoverlay if not already present.
+    if ! grep -q "^dtoverlay=miniuart-bt" "$BOOT_CONFIG" 2>/dev/null \
+       && ! grep -q "^dtoverlay=disable-bt" "$BOOT_CONFIG" 2>/dev/null; then
+        info "Bluetooth may be using /dev/ttyAMA0 — freeing it for MeshCore."
+        echo ""
+        echo -e "    ${BOLD}1${NC}) Move Bluetooth to mini-UART (recommended — BT still works)"
+        echo -e "    ${BOLD}2${NC}) Disable Bluetooth entirely"
+        echo -e "    ${BOLD}3${NC}) Skip (only if you know BT is not using ttyAMA0)"
+        echo ""
+        echo -en "${CYAN}?${NC}  Select [1]: "; read -r BT_CHOICE </dev/tty
+        BT_CHOICE="${BT_CHOICE:-1}"
+        case "$BT_CHOICE" in
+            1)
+                echo "dtoverlay=miniuart-bt" >> "$BOOT_CONFIG"
+                ok "Bluetooth moved to mini-UART (ttyAMA0 freed for MeshCore)."
+                NEEDS_REBOOT=1
+                ;;
+            2)
+                echo "dtoverlay=disable-bt" >> "$BOOT_CONFIG"
+                systemctl disable hciuart.service 2>/dev/null || true
+                ok "Bluetooth disabled. ttyAMA0 freed for MeshCore."
+                NEEDS_REBOOT=1
+                ;;
+            3)
+                warn "Skipped — if UART doesn't work, Bluetooth may be the cause."
+                ;;
+            *)
+                warn "Invalid choice — skipping."
+                ;;
+        esac
+    else
+        ok "Bluetooth already configured to not use ttyAMA0."
+    fi
+
+    if [[ "$NEEDS_REBOOT" == "1" ]]; then
+        warn "A reboot will be needed after installation for UART changes to take effect."
+    fi
+    echo ""
 fi
 
 # ── Step 2: SerialMux ────────────────────────────────────────────────────────
@@ -292,6 +398,11 @@ if [[ ! -f "$RW_DIR/.env" ]]; then
 # MESHCORE_PASSWORD_HASH=
 MESHCORE_SECRET_KEY=$SECRET_KEY
 
+# Connection mode: "usb" or "serial"
+# usb    = Ikoka connected via USB cable (standard firmware, /dev/ttyACM0)
+# serial = Ikoka connected via Pi UART pins 8/10 (RS232 firmware, /dev/ttyAMA0)
+MESHCORE_CONNECTION_MODE=$CONN_MODE
+
 # Serial (via SerialMux virtual port)
 MESHCORE_SERIAL_PORT=/dev/ttyV0
 MESHCORE_SERIAL_BAUD=115200
@@ -309,7 +420,9 @@ MESHCORE_HOST=0.0.0.0
 MESHCORE_PORT=$RW_PORT
 MESHCORE_DEBUG=0
 
-# Firmware flash
+# Firmware flash — use the real serial port (not SerialMux)
+# For USB mode: /dev/serial/by-id/usb-Seeed_Studio_XIAO_nRF52840_...-if00
+# For serial mode: firmware flashing still uses USB if the cable is connected
 MESHCORE_FLASH_SERIAL_PORT=$SERIAL_PORT
 MESHCORE_FIRMWARE_UPLOAD_DIR=/tmp/meshcore-fw
 
@@ -385,4 +498,22 @@ echo -e "  ${BOLD}Change password:${NC}"
 echo -e "    sudo $RW_DIR/venv/bin/python3 $RW_DIR/setup_auth.py"
 echo -e "    sudo systemctl restart RepeaterWatch"
 echo ""
+
+# Reboot prompt for serial mode (UART won't work until kernel releases the port)
+if [[ "$CONN_MODE" == "serial" ]] && [[ "${NEEDS_REBOOT:-0}" == "1" ]]; then
+    echo ""
+    warn "IMPORTANT: A reboot is required for UART serial mode to work."
+    info "The kernel serial console was disabled, but this only takes effect after reboot."
+    info "Services will start automatically after reboot."
+    echo ""
+    echo -en "${CYAN}?${NC}  Reboot now? [Y/n]: "; read -r DO_REBOOT </dev/tty
+    DO_REBOOT="${DO_REBOOT:-Y}"
+    if [[ "$DO_REBOOT" =~ ^[Yy] ]]; then
+        ok "Rebooting..."
+        reboot
+    else
+        warn "Remember to reboot before the serial connection will work."
+    fi
+fi
+
 ok "All done!"

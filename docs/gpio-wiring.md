@@ -29,6 +29,24 @@ not the physical pin number on the Pi header. See the Pi header diagram at the b
 | Radio reset / DFU | GPIO 4 | Pin 7 | XIAO RESET pin | Likely yes | See note 1 |
 | USB relay control | GPIO 17 | Pin 11 | Relay/switch circuit | No — needs extra parts | See note 2 |
 
+### Serial UART Connection (required for serial/RS232 firmware only)
+
+If your Ikoka stick is running the **serial/RS232 firmware** (from the `feature/console-serial1`
+branch), the MeshCore console communicates over hardware UART pins instead of USB CDC. You must
+wire the Pi's UART to the XIAO's serial pins:
+
+| Function | BCM GPIO | Pi Physical Pin | Connects To | Direct? | Notes |
+|----------|----------|-----------------|-------------|---------|-------|
+| UART TX | GPIO 14 | Pin 8 | XIAO RX (D7) | Yes | Pi transmit → XIAO receive |
+| UART RX | GPIO 15 | Pin 10 | XIAO TX (D6) | Yes | XIAO transmit → Pi receive |
+| Ground | — | Pin 6 or 9 | XIAO GND | Yes | Common ground (required) |
+
+Both sides are 3.3V — no level shifter needed. **TX and RX must be crossed** (Pi TX goes to
+XIAO RX, and vice versa).
+
+> **Note:** If your stick uses the standard USB firmware, these UART pins are not needed —
+> all communication happens over the USB cable via `/dev/ttyACM0`.
+
 ### Optional Sensors (not needed initially)
 
 | Function | BCM GPIO | Pi Physical Pin | Connects To | Direct? | Notes |
@@ -84,22 +102,24 @@ ever a wiring fault. Can be omitted if you want to keep it simple.
 
 ## Note 2 — USB Relay (GPIO 17 → USB VBUS switch)
 
-> **NOTE: The explanation below is our current working theory based on code analysis and
-> photos of a real build. It has NOT been officially confirmed by MrAlders0n. A test build
-> is planned to verify this in practice.**
+> **IMPORTANT: The USB relay requires the RS232/UART firmware** (`feature/console-serial1`
+> branch). With standard USB firmware, the nRF52840 will not enumerate without VBUS, so
+> cutting VBUS kills the serial connection entirely. With RS232 firmware, serial goes over
+> UART pins instead, so VBUS can be safely switched without losing communication.
 
 **What the code does:**
-- Drives GPIO 17 HIGH ("dh") to enable the USB relay (connects VBUS during flashing)
-- Drives GPIO 17 LOW ("dl") to disable the USB relay (normal operation — VBUS cut)
+- Drives GPIO 17 HIGH ("dh") to enable the USB relay (connects VBUS)
+- Drives GPIO 17 LOW ("dl") to disable the USB relay (VBUS cut)
 - The relay is NOT used for normal reboot/reset — that uses GPIO 4 only
 - During a firmware flash the relay stays ON for the entire DFU transfer, then turns OFF
 
-**Why this is needed — our current understanding:**
+**Why this is needed:**
 
 The Ikoka stick is powered externally (battery via BQ24074 charge controller), not from
-the Pi's USB 5V (VBUS). During normal operation, VBUS from the Pi is disconnected. The
-USB data lines (D+, D−, GND) remain connected, and the nRF52840 can communicate via
-USB serial (/dev/ttyACM0) using its own 3.3V power — no VBUS required for CDC serial.
+the Pi's USB 5V (VBUS). During normal operation, VBUS from the Pi is disconnected so the
+external charger manages the battery without interference. The USB data lines (D+, D−, GND)
+remain connected. Serial communication goes over the Pi's UART pins (see Note 6), so the
+radio stays reachable regardless of VBUS state.
 
 When flashing firmware, the sequence is:
 1. GPIO 4 double-pulse triggers DFU/bootloader mode on the nRF52840
@@ -126,10 +146,11 @@ Pi GND (Pin 6)      ──► Relay module GND
 Normal operation: relay off → NO open → VBUS cut → Ikoka on battery power
 Flashing:         relay on  → NO closed → VBUS connected → DFU enumeration
 
-**STATUS: Unconfirmed — awaiting official confirmation from MrAlders0n**
+**STATUS: Partially confirmed on meshcore-site3 (2026-04-04)**
+- [x] Confirm DFU enumeration requires VBUS to be present — **confirmed**, nRF52840 will not enumerate without VBUS
+- [x] Confirm USB relay requires RS232/UART firmware — **confirmed**, standard USB firmware loses serial when VBUS is cut
 - [ ] Confirm relay interrupts VBUS only (not full USB cable)
 - [ ] Confirm Ikoka is externally powered (battery) and does not rely on USB VBUS
-- [ ] Confirm DFU enumeration requires VBUS to be present
 
 ---
 
@@ -243,8 +264,8 @@ Physical pin layout (looking at the Pi with the header at top-right):
          3V3  (1) (2)  5V
    SDA / GPIO2  (3) (4)  5V
    SCL / GPIO3  (5) (6)  GND
-★      GPIO4  (7) (8)  GPIO14 / TXD
-           GND  (9) (10) GPIO15 / RXD
+★      GPIO4  (7) (8)  GPIO14 / TXD  ★ (serial mode)
+           GND  (9) (10) GPIO15 / RXD  ★ (serial mode)
 ★     GPIO17 (11) (12) GPIO18 ★
       GPIO27 (13) (14) GND
       GPIO22 (15) (16) GPIO23
@@ -263,6 +284,7 @@ Physical pin layout (looking at the Pi with the header at top-right):
 ```
 
 ★ = pins used by this project (current or optional)
+★ (serial mode) = only used when running serial/RS232 firmware
 
 ---
 
@@ -290,6 +312,41 @@ D10 ●  (MOSI)        ●
 
 ---
 
+## Note 6 — UART Serial Connection (GPIO 14, 15 — serial/RS232 firmware only)
+
+**When this is needed:**
+If your Ikoka stick is flashed with the **serial/RS232 firmware** (the `feature/console-serial1`
+branch of MeshCore), the MeshCore CLI commands are sent over the hardware UART pins instead of
+USB CDC serial. Standard USB firmware does NOT need this wiring.
+
+**What changes from USB mode:**
+- SerialMux connects to `/dev/ttyAMA0` (the Pi's hardware UART) instead of `/dev/serial/by-id/...`
+- The kernel serial console must be disabled (removed from `cmdline.txt`) so Linux doesn't
+  claim the UART for boot messages
+- The USB cable may still be connected for power and/or DFU firmware flashing, but the
+  MeshCore serial console goes over UART
+
+**Wiring:**
+```
+Pi GPIO 14 / TX (Pin 8)  ──────► XIAO RX (D7)
+Pi GPIO 15 / RX (Pin 10) ◄────── XIAO TX (D6)
+Pi GND         (Pin 6/9) ──────── XIAO GND
+```
+
+**Important:** TX and RX are crossed — the Pi's transmit pin connects to the XIAO's receive
+pin, and vice versa. Both sides are 3.3V, so no level shifter or resistors are needed.
+
+**Kernel configuration required:**
+1. `enable_uart=1` must be in `/boot/firmware/config.txt` (or `/boot/config.txt` on older OS)
+2. `console=serial0,115200` must be **removed** from `/boot/firmware/cmdline.txt`
+3. A reboot is required after these changes
+
+The `install.sh` script handles this automatically when you choose "Serial (UART)" mode.
+
+**STATUS: Confirmed working on meshcore-site3 (Nebra conversion)**
+
+---
+
 ## Summary — What to Build First
 
 1. **Start with reset only (GPIO 4 → RST)**
@@ -301,8 +358,11 @@ D10 ●  (MOSI)        ●
    - The XIAO may re-enumerate automatically without needing USB cycling
    - Only add the relay circuit if DFU detection fails without it
 
-3. **Add USB relay only if needed**
-   - More complex, adds components, not worth building until confirmed necessary
+3. **Add USB relay only if using RS232/UART firmware**
+   - The USB relay **requires the RS232 firmware** — with standard USB firmware, cutting VBUS
+     kills the serial connection (the nRF52840 won't enumerate without VBUS)
+   - With RS232 firmware, serial goes over UART so VBUS can be safely switched
+   - More complex wiring, adds components — only needed if managing external battery charging
 
 4. **Add sensors later**
    - AS3935 (lightning), BQ24074 (charger) — only if that hardware is purchased; need GPIO pins (see table above)
@@ -313,6 +373,5 @@ D10 ●  (MOSI)        ●
 
 ## Open Questions
 
-- [ ] USB relay — awaiting official confirmation from MrAlders0n (see Note 2 for current theory)
-- [ ] Is the Ikoka stick's RESET pin exposed and accessible for direct wiring?
+- [ ] USB relay — confirm relay interrupts VBUS only, confirm Ikoka is externally powered (see Note 2)
 - [ ] Are there any existing GPIO connections between the Ikoka stick and Pi in the Ikoka design?

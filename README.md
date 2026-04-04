@@ -22,7 +22,7 @@ A web-based monitoring dashboard for [MeshCore](https://meshcore.net/) repeaters
 ## Requirements
 
 - Raspberry Pi (tested on Pi 4 and CM3) with **Raspberry Pi OS 64-bit**
-- MeshCore radio via USB (Ikoka Stick, Heltec T114, RAK 4631, etc.)
+- MeshCore radio connected via **USB** (standard firmware) or **UART serial** (RS232 firmware)
 - Python 3.10+
 
 ## Install / Upgrade / Uninstall
@@ -53,6 +53,8 @@ All pins use BCM numbering and are configurable via `.env`:
 |----------|-------------|---------|-------|
 | Radio reset | `MESHCORE_RADIO_RESET_GPIO` | 4 | Directly connected to radio RESET pin |
 | USB relay | `MESHCORE_USB_RELAY_GPIO` | 17 | Controls VBUS on USB cable to radio (see below) |
+| UART TX | — | GPIO 14 (Pin 8) | Serial mode only — Pi TX to radio RX |
+| UART RX | — | GPIO 15 (Pin 10) | Serial mode only — radio TX to Pi RX |
 | AS3935 IRQ | `MESHCORE_AS3935_IRQ_GPIO` | 18 | Lightning detector interrupt |
 | BQ24074 /CHG | `MESHCORE_BQ24074_CHG_GPIO` | 19 | Charge status (active low) |
 | BQ24074 /PGOOD | `MESHCORE_BQ24074_PGOOD_GPIO` | 13 | Power good (active low) |
@@ -62,7 +64,9 @@ I2C sensors (BME280, INA3221) use the Pi's fixed I2C pins (GPIO 2/3, physical pi
 
 ### USB Relay
 
-The USB relay controls the VBUS (5V power) line on the USB cable between the Pi and the radio. USB data lines (D+/D-) remain connected at all times, so serial communication works regardless of relay state.
+The USB relay controls the VBUS (5V power) line on the USB cable between the Pi and the radio. USB data lines (D+/D-) remain connected at all times.
+
+**Requires serial/UART mode.** The nRF52840's USB controller will not enumerate without VBUS, so cutting VBUS on standard USB firmware kills your serial connection entirely. With the RS232/UART firmware, serial communication goes over the Pi's UART pins instead, so VBUS can be safely switched without losing contact with the radio.
 
 **Why?** Many MeshCore radio boards have an onboard charger that activates when USB power is present. If you're using an external charge controller (like the BQ24074), you want VBUS disconnected during normal operation so the external charger manages the battery. The relay lets you cut VBUS for normal use and reconnect it only when needed for DFU firmware flashing (which requires the radio to detect a USB host).
 
@@ -74,11 +78,17 @@ All settings in `/opt/RepeaterWatch/.env`. See [.env.example](.env.example) for 
 
 ## Architecture
 
+The radio connects to SerialMux, which multiplexes the single serial port into three virtual ports. The installer asks which connection mode to use.
+
 ```
-USB Radio ──> SerialMux ──┬──> /dev/ttyV0 ──> RepeaterWatch (web UI + monitoring)
-                          ├──> /dev/ttyV1 ──> mctomqtt (MQTT bridge)
-                          └──> /dev/ttyV2 ──> Terminal (serial console)
+USB mode:    Radio ──USB──> /dev/ttyACM0 ──> SerialMux ──┬──> /dev/ttyV0 ──> RepeaterWatch
+Serial mode: Radio ──UART─> /dev/ttyAMA0 ──> SerialMux ──┤
+                                                          ├──> /dev/ttyV1 ──> mctomqtt
+                                                          └──> /dev/ttyV2 ──> Terminal
 ```
+
+**USB mode** (default): standard MeshCore firmware, radio plugged in via USB cable.
+**Serial mode**: RS232 firmware (`feature/console-serial1`), radio wired to Pi UART pins 8/10. Requires kernel config to free `/dev/ttyAMA0` from the console, serial-getty, and Bluetooth. See `docs/gpio-wiring.md` Note 6.
 
 ## Security
 
