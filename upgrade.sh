@@ -2,10 +2,10 @@
 # ============================================================================
 # RepeaterWatch Upgrade Script
 # Upgrades an existing RepeaterWatch installation from any fork:
-#   - MrAlders0n/RepeaterWatch (upstream)
+#   - MrAlders0n/RepeaterWatch (upstream original)
+#   - sskerry/RepeaterWatch (security + UX improvements)
 #   - jjkroell/Repeater-Watch (Jesse's UX fork)
-#   - sskerry/RepeaterWatch (this fork)
-#   - or any other fork
+#   - any other fork
 #
 # Preserves: .env, meshcore.db, venv (updated), systemd service
 # ============================================================================
@@ -57,17 +57,19 @@ echo ""
 # ── Choose upgrade source ───────────────────────────────────────────────────
 info "Which repo do you want to upgrade to?"
 echo ""
-echo -e "    ${BOLD}1${NC}) MrAlders0n/RepeaterWatch (upstream original)"
-echo -e "    ${BOLD}2${NC}) jjkroell/Repeater-Watch  (Jesse's UX fork)"
-echo -e "    ${BOLD}3${NC}) Custom URL"
+echo -e "    ${BOLD}1${NC}) MrAlders0n/RepeaterWatch  (upstream original)"
+echo -e "    ${BOLD}2${NC}) sskerry/RepeaterWatch     (security + UX improvements)"
+echo -e "    ${BOLD}3${NC}) jjkroell/Repeater-Watch   (Jesse's UX fork)"
+echo -e "    ${BOLD}4${NC}) Custom URL"
 echo ""
 echo -en "${CYAN}?${NC}  Select [1]: "; read -r REPO_CHOICE </dev/tty
 REPO_CHOICE="${REPO_CHOICE:-1}"
 
 case "$REPO_CHOICE" in
     1) NEW_REPO="https://github.com/MrAlders0n/RepeaterWatch.git"; NEW_BRANCH="main" ;;
-    2) NEW_REPO="https://github.com/jjkroell/Repeater-Watch.git"; NEW_BRANCH="main" ;;
-    3)
+    2) NEW_REPO="https://github.com/sskerry/RepeaterWatch.git"; NEW_BRANCH="main" ;;
+    3) NEW_REPO="https://github.com/jjkroell/Repeater-Watch.git"; NEW_BRANCH="main" ;;
+    4)
         echo -en "${CYAN}?${NC}  Repo URL: "; read -r NEW_REPO </dev/tty
         if [[ -z "$NEW_REPO" ]]; then err "Repo URL required."; exit 1; fi
         echo -en "${CYAN}?${NC}  Branch [main]: "; read -r NEW_BRANCH_RAW </dev/tty

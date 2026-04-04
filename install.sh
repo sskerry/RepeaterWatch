@@ -95,14 +95,27 @@ ok "Web port: $RW_PORT"
 echo ""
 
 # --- RepeaterWatch git repo ---
-RW_DEFAULT_REPO="https://github.com/MrAlders0n/RepeaterWatch.git"
 echo -e "  ${BOLD}Step 4/4 — RepeaterWatch Git repository${NC}\n"
 info "Which RepeaterWatch repo to clone?"
-info "Default: $RW_DEFAULT_REPO"
-info "Press Enter to use the default, or paste a different URL."
 echo ""
-echo -en "${CYAN}?${NC}  Repo URL [$RW_DEFAULT_REPO]: "; read -r RW_REPO_RAW </dev/tty
-RW_REPO="${RW_REPO_RAW:-$RW_DEFAULT_REPO}"
+echo -e "    ${BOLD}1${NC}) MrAlders0n/RepeaterWatch  (upstream original)"
+echo -e "    ${BOLD}2${NC}) sskerry/RepeaterWatch     (security + UX improvements)"
+echo -e "    ${BOLD}3${NC}) jjkroell/Repeater-Watch   (Jesse's UX fork)"
+echo -e "    ${BOLD}4${NC}) Custom URL"
+echo ""
+echo -en "${CYAN}?${NC}  Select [1]: "; read -r RW_REPO_CHOICE </dev/tty
+RW_REPO_CHOICE="${RW_REPO_CHOICE:-1}"
+
+case "$RW_REPO_CHOICE" in
+    1) RW_REPO="https://github.com/MrAlders0n/RepeaterWatch.git" ;;
+    2) RW_REPO="https://github.com/sskerry/RepeaterWatch.git" ;;
+    3) RW_REPO="https://github.com/jjkroell/Repeater-Watch.git" ;;
+    4)
+        echo -en "${CYAN}?${NC}  Repo URL: "; read -r RW_REPO </dev/tty
+        if [[ -z "$RW_REPO" ]]; then err "Repo URL required."; exit 1; fi
+        ;;
+    *) err "Invalid selection."; exit 1 ;;
+esac
 ok "Repo: $RW_REPO"
 echo ""
 

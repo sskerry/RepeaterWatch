@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """setup_auth.py — Manage RepeaterWatch password
 Usage:
-    sudo -u meshcoremon /opt/RepeaterWatch/venv/bin/python3 setup_auth.py
-    sudo -u meshcoremon /opt/RepeaterWatch/venv/bin/python3 setup_auth.py --clear
+    sudo /opt/RepeaterWatch/venv/bin/python3 setup_auth.py
+    sudo /opt/RepeaterWatch/venv/bin/python3 setup_auth.py --clear
 """
 import argparse, getpass, os, sys
 
