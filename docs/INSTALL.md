@@ -31,7 +31,7 @@ is flashed to the stick:
 
 | | USB Mode (default) | Serial / UART Mode |
 |---|---|---|
-| **Firmware** | Standard MeshCore firmware | RS232 firmware (`feature/console-serial1` branch) |
+| **Firmware** | LetsMesh firmware (recommended for mctomqtt data feed) | RS232 firmware (`feature/console-serial1` branch) |
 | **Physical connection** | USB cable only | USB cable (power) + UART wires (Pi pins 8, 10, GND) |
 | **Pi serial device** | `/dev/ttyACM0` via `/dev/serial/by-id/...` | `/dev/ttyAMA0` (Pi hardware UART) |
 | **SerialMux REAL_PORT** | USB by-id path | `/dev/ttyAMA0` |

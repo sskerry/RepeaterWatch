@@ -87,8 +87,8 @@ Serial mode: Radio ──UART─> /dev/ttyAMA0 ──> SerialMux ──┤
                                                           └──> /dev/ttyV2 ──> Terminal
 ```
 
-**USB mode** (default): standard MeshCore firmware, radio plugged in via USB cable.
-**Serial mode**: RS232 firmware (`feature/console-serial1`), radio wired to Pi UART pins 8/10. Requires kernel config to free `/dev/ttyAMA0` from the console, serial-getty, and Bluetooth. See `docs/gpio-wiring.md` Note 6.
+**USB mode** (default): LetsMesh firmware recommended (enables mctomqtt data feed), radio plugged in via USB cable.
+**Serial mode**: RS232 firmware (`feature/console-serial1`), radio wired to Pi UART pins 8/10. Required for USB relay. Requires kernel config to free `/dev/ttyAMA0` from the console, serial-getty, and Bluetooth. See `docs/gpio-wiring.md` Note 6.
 
 ## Security
 
