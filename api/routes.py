@@ -56,6 +56,7 @@ def device_info():
         "lat": lat,
         "lon": lon,
         "uptime_secs": uptime,
+        "hardware": os.environ.get("MESHCORE_HARDWARE", ""),
     })
 
 
@@ -144,40 +145,48 @@ def packets_activity():
         })
 
     dups = models.query_packet_dups(h)
-    dup_by_ts = {}
-    for d in dups:
-        dup_by_ts[d["ts"]] = d
-    dup_timestamps = sorted(dup_by_ts.keys())
-    def find_dups(bucket_ts):
-        dd = 0
-        fd = 0
-        re = 0
-        for dts in dup_timestamps:
-            if dts <= bucket_ts:
-                dd = dup_by_ts[dts]["dups_direct"]
-                fd = dup_by_ts[dts]["dups_flood"]
-                re = dup_by_ts[dts]["rx_errors"]
-            else:
-                break
-        return dd, fd, re
+    dup_timestamps = sorted(d["ts"] for d in dups)
+    dup_by_ts = {d["ts"]: d for d in dups}
+
+    # Build bucket boundaries and assign dup/error deltas to the correct bucket.
+    bucket_secs = bucket * 60
     dups_direct_list = []
     dups_flood_list = []
     rx_errors_list = []
+    prev_bucket_ts = rows[0]["bucket"] - bucket_secs if rows else 0
     for r in rows:
-        dd, fd, re = find_dups(r["bucket"])
+        curr_bucket_ts = r["bucket"]
+        dd = fd = re = 0
+        for dts in dup_timestamps:
+            if prev_bucket_ts < dts <= curr_bucket_ts:
+                dd += dup_by_ts[dts]["dups_direct"]
+                fd += dup_by_ts[dts]["dups_flood"]
+                re += dup_by_ts[dts]["rx_errors"]
         dups_direct_list.append(dd)
         dups_flood_list.append(fd)
         rx_errors_list.append(re)
+        prev_bucket_ts = curr_bucket_ts
+
+    # Include any trailing errors beyond the last closed bucket boundary.
+    last_bucket_ts = rows[-1]["bucket"] if rows else 0
+    trailing_errors = sum(
+        dup_by_ts[dts]["rx_errors"]
+        for dts in dup_timestamps
+        if dts > last_bucket_ts
+    )
+    if trailing_errors and rx_errors_list:
+        rx_errors_list[-1] += trailing_errors
+
     return jsonify({
-        "timestamps": [r["bucket"] for r in rows],
-        "tx_direct": [r["tx_direct"] for r in rows],
-        "tx_flood": [r["tx_flood"] for r in rows],
-        "rx_direct": [r["rx_direct"] for r in rows],
-        "rx_flood": [r["rx_flood"] for r in rows],
+        "timestamps":  [r["bucket"] for r in rows],
+        "tx_direct":   [r["tx_direct"] for r in rows],
+        "tx_flood":    [r["tx_flood"] for r in rows],
+        "rx_direct":   [r["rx_direct"] for r in rows],
+        "rx_flood":    [r["rx_flood"] for r in rows],
         "dups_direct": dups_direct_list,
-        "dups_flood": dups_flood_list,
-        "rx_errors": rx_errors_list,
-        "total": [r["total"] for r in rows],
+        "dups_flood":  dups_flood_list,
+        "rx_errors":   rx_errors_list,
+        "total":       [r["total"] for r in rows],
     })
 
 
@@ -338,7 +347,7 @@ def stats_pi_snapshot():
 # ── Settings ──────────────────────────────────────────────
 
 SETTINGS_DEFAULTS = {
-    "power_source": "ina3221",
+    "power_source": "onboard",
     "ina_solar_channel": "ch1",
     "ina_repeater_channel": "ch0",
     "flash_serial_port": config.FLASH_SERIAL_PORT,
@@ -561,6 +570,85 @@ def sensors_status():
     return jsonify({"running": False, "sensors": {}})
 
 
+# ── Sensor Config (enable/disable via .env) ───────────────
+
+@api.route("/sensors/config", methods=["GET"])
+def sensors_config_get():
+    """Return enabled/disabled state of each sensor from .env"""
+    env_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), ".env")
+    keys = {
+        "ina3221":  "MESHCORE_SENSOR_INA3221",
+        "bme280":   "MESHCORE_SENSOR_BME280",
+        "lis2dw12": "MESHCORE_SENSOR_LIS2DW12",
+        "as3935":   "MESHCORE_SENSOR_AS3935",
+        "bq24074":  "MESHCORE_SENSOR_BQ24074",
+    }
+    env_vals = {}
+    if os.path.exists(env_path):
+        for line in open(env_path):
+            s = line.strip()
+            if "=" in s and not s.startswith("#"):
+                k, _, v = s.partition("=")
+                env_vals[k.strip()] = v.strip()
+    cfg = {}
+    for name, key in keys.items():
+        cfg[name] = env_vals.get(key, os.environ.get(key, "0")) == "1"
+    poll = env_vals.get("MESHCORE_SENSOR_POLL",
+                        os.environ.get("MESHCORE_SENSOR_POLL", "0")) == "1"
+    return jsonify({"sensors": cfg, "polling_enabled": poll})
+
+
+@api.route("/sensors/config", methods=["POST"])
+def sensors_config_post():
+    """Write sensor toggles to .env, auto-update MESHCORE_SENSOR_POLL"""
+    env_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), ".env")
+    keys = {
+        "ina3221":  "MESHCORE_SENSOR_INA3221",
+        "bme280":   "MESHCORE_SENSOR_BME280",
+        "lis2dw12": "MESHCORE_SENSOR_LIS2DW12",
+        "as3935":   "MESHCORE_SENSOR_AS3935",
+        "bq24074":  "MESHCORE_SENSOR_BQ24074",
+    }
+    if not os.path.exists(env_path):
+        return jsonify({"error": ".env not found"}), 500
+    data = request.get_json(force=True, silent=True) or {}
+    sensors = data.get("sensors", {})
+    for name in sensors:
+        if name not in keys:
+            return jsonify({"error": f"Unknown sensor: {name}"}), 400
+    lines = open(env_path).readlines()
+
+    def upsert(lines, key, value):
+        found = False
+        out = []
+        for l in lines:
+            if l.startswith(key + "="):
+                out.append(f"{key}={value}\n")
+                found = True
+            else:
+                out.append(l)
+        if not found:
+            out.append(f"{key}={value}\n")
+        return out
+
+    for name, key in keys.items():
+        if name in sensors:
+            lines = upsert(lines, key, "1" if sensors[name] else "0")
+
+    env_vals = {}
+    for l in lines:
+        s = l.strip()
+        if "=" in s and not s.startswith("#"):
+            k, _, v = s.partition("=")
+            env_vals[k.strip()] = v.strip()
+    any_enabled = any(env_vals.get(v, "0") == "1" for v in keys.values())
+    lines = upsert(lines, "MESHCORE_SENSOR_POLL", "1" if any_enabled else "0")
+    open(env_path, "w").writelines(lines)
+    return jsonify({"ok": True, "polling_enabled": any_enabled, "restart_required": True})
+
+
+# ── Radio / GPIO ──────────────────────────────────────────
+
 @api.route("/radio/reset", methods=["POST"])
 def radio_reset():
     poller = current_app.config.get("poller")
@@ -614,6 +702,14 @@ def neighbors_purge():
         return jsonify({"error": "hours must be a positive number"}), 400
     count = models.delete_old_neighbors(int(hours))
     return jsonify({"status": "ok", "deleted": count})
+
+
+@api.route("/neighbors/delete", methods=["POST"])
+def neighbors_delete():
+    conn = models._conn()
+    conn.execute("DELETE FROM neighbors")
+    conn.commit()
+    return jsonify({"status": "ok"})
 
 
 @api.route("/database/reset", methods=["POST"])

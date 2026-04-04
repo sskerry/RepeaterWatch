@@ -157,19 +157,27 @@ def _flash_worker(fw_path: str, expected_hash: str, poller) -> None:
     else:
         _append_log("Warning: no new USB device detected after enabling relay.")
 
-    # Wait for the DFU serial port to re-appear after USB re-enumeration
-    port = models.get_setting("flash_serial_port", config.FLASH_SERIAL_PORT)
-    _set_state("flashing", "Waiting for DFU port...")
-    _append_log(f"Waiting for {port} to appear...")
-    dfu_port = _wait_for_port(port, timeout=15)
-    if not dfu_port:
-        _append_log(f"ERROR: {port} did not appear within 15 seconds.")
-        _set_state("error", "DFU port not found")
-        _restart_services(poller)
-        _cleanup(fw_path)
-        _append_log("Done.")
-        return
-    _append_log(f"DFU port ready: {dfu_port}")
+    # Use the detected bootloader device as the DFU port.
+    # In bootloader mode the XIAO enumerates under a different USB name
+    # (Seeed_XIAO_nRF52840_Sense) than the MeshCore firmware port
+    # (Seeed_Studio_XIAO_nRF52840), so we prefer the newly detected device.
+    if detected:
+        dfu_port = f"/dev/serial/by-id/{detected}"
+        _append_log(f"DFU port ready: {dfu_port}")
+    else:
+        # Fall back to configured port
+        port = models.get_setting("flash_serial_port", config.FLASH_SERIAL_PORT)
+        _set_state("flashing", "Waiting for DFU port...")
+        _append_log(f"Waiting for {port} to appear...")
+        dfu_port = _wait_for_port(port, timeout=15)
+        if not dfu_port:
+            _append_log(f"ERROR: {port} did not appear within 15 seconds.")
+            _set_state("error", "DFU port not found")
+            _restart_services(poller)
+            _cleanup(fw_path)
+            _append_log("Done.")
+            return
+        _append_log(f"DFU port ready: {dfu_port}")
 
     # Run adafruit-nrfutil (no --touch since we entered bootloader via GPIO)
     _set_state("flashing", "Flashing firmware...")

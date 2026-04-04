@@ -2,9 +2,18 @@ var NeighborMap = (function () {
     var map = null;
     var layerGroup = null;
     var repeaterInfo = null;
+    var frozen = true;
 
     function init(el) {
-        map = L.map(el).setView([0, 0], 2);
+        map = L.map(el, {
+            dragging:        false,
+            touchZoom:       false,
+            doubleClickZoom: false,
+            scrollWheelZoom: false,
+            boxZoom:         false,
+            keyboard:        false,
+            zoomControl:     true,
+        }).setView([0, 0], 2);
         L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
             attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> &copy; <a href="https://carto.com/">CARTO</a>',
             subdomains: 'abcd',
@@ -12,6 +21,30 @@ var NeighborMap = (function () {
         }).addTo(map);
         layerGroup = L.layerGroup().addTo(map);
         return map;
+    }
+
+    function freeze() {
+        if (!map) return;
+        frozen = true;
+        map.dragging.disable();
+        map.touchZoom.disable();
+        map.doubleClickZoom.disable();
+        map.scrollWheelZoom.disable();
+        map.boxZoom.disable();
+        map.keyboard.disable();
+        map.getContainer().style.cursor = 'default';
+    }
+
+    function unfreeze() {
+        if (!map) return;
+        frozen = false;
+        map.dragging.enable();
+        map.touchZoom.enable();
+        map.doubleClickZoom.enable();
+        map.scrollWheelZoom.enable();
+        map.boxZoom.enable();
+        map.keyboard.enable();
+        map.getContainer().style.cursor = '';
     }
 
     function setRepeaterInfo(info) {
@@ -35,7 +68,6 @@ var NeighborMap = (function () {
         });
         marker.bindPopup(popupHtml);
 
-        // Add label via DivIcon overlay
         var labelIcon = L.divIcon({
             className: 'map-node-label',
             html: '<span>' + label + '</span>',
@@ -54,7 +86,6 @@ var NeighborMap = (function () {
         var bounds = [];
         var repeaterLatLng = null;
 
-        // Draw repeater
         if (repeaterInfo && repeaterInfo.lat != null && repeaterInfo.lon != null) {
             repeaterLatLng = [repeaterInfo.lat, repeaterInfo.lon];
             var label = repeaterInfo.pubkey_prefix || '??';
@@ -67,7 +98,6 @@ var NeighborMap = (function () {
             bounds.push(repeaterLatLng);
         }
 
-        // Draw neighbors
         neighbors.forEach(function (n) {
             if (n.lat == null || n.lon == null) return;
             if (n.lat === 0 && n.lon === 0) return;
@@ -86,7 +116,6 @@ var NeighborMap = (function () {
             layers.forEach(function (l) { layerGroup.addLayer(l); });
             bounds.push(nLatLng);
 
-            // Draw dotted line from repeater to neighbor
             if (repeaterLatLng) {
                 var color = snrColor(n.last_snr);
                 var line = L.polyline([repeaterLatLng, nLatLng], {
@@ -121,5 +150,12 @@ var NeighborMap = (function () {
         if (map) map.invalidateSize();
     }
 
-    return { init: init, setRepeaterInfo: setRepeaterInfo, update: update, invalidateSize: invalidateSize };
+    return {
+        init: init,
+        freeze: freeze,
+        unfreeze: unfreeze,
+        setRepeaterInfo: setRepeaterInfo,
+        update: update,
+        invalidateSize: invalidateSize,
+    };
 })();

@@ -211,19 +211,31 @@ def query_packet_dups(hours: int = 24) -> list[dict]:
     ).fetchall()
     result = []
     prev = None
+
+    def _delta(cur, prv):
+        c = cur or 0
+        p = prv or 0
+        d = c - p
+        return c if d < 0 else d
+
     for r in rows:
         row = dict(r)
         if prev is not None:
-            dd = max(0, (row["direct_dups"] or 0) - (prev["direct_dups"] or 0))
-            fd = max(0, (row["flood_dups"] or 0) - (prev["flood_dups"] or 0))
-            re = max(0, (row["recv_errors"] or 0) - (prev["recv_errors"] or 0))
+            dd = _delta(row["direct_dups"], prev["direct_dups"])
+            fd = _delta(row["flood_dups"],  prev["flood_dups"])
+            re = _delta(row["recv_errors"], prev["recv_errors"])
             result.append({"ts": row["ts"], "dups_direct": dd, "dups_flood": fd, "rx_errors": re})
         prev = row
     return result
 
 
 def query_packets_activity_from_stats(hours: int = 24) -> list[dict]:
-    """Derive per-interval packet counts from cumulative stats_packets counters."""
+    """Derive per-interval packet counts from cumulative stats_packets counters.
+
+    Counter resets (e.g. after service restart) produce a negative delta.
+    When a reset is detected the new counter value is used as the delta so
+    errors are never silently discarded across time-range changes.
+    """
     rows = _conn().execute(
         "SELECT ts, direct_tx, flood_tx, direct_rx, flood_rx, recv_errors "
         "FROM stats_packets WHERE ts >= ? ORDER BY ts",
@@ -231,23 +243,37 @@ def query_packets_activity_from_stats(hours: int = 24) -> list[dict]:
     ).fetchall()
     result = []
     prev = None
+
+    def _delta(cur, prv):
+        c = cur or 0
+        p = prv or 0
+        d = c - p
+        return c if d < 0 else d
+
     for r in rows:
         row = dict(r)
         if prev is not None:
-            dtx = max(0, (row["direct_tx"] or 0) - (prev["direct_tx"] or 0))
-            ftx = max(0, (row["flood_tx"] or 0) - (prev["flood_tx"] or 0))
-            drx = max(0, (row["direct_rx"] or 0) - (prev["direct_rx"] or 0))
-            frx = max(0, (row["flood_rx"] or 0) - (prev["flood_rx"] or 0))
-            re = max(0, (row["recv_errors"] or 0) - (prev["recv_errors"] or 0))
-            result.append({
-                "bucket": row["ts"],
-                "tx_direct": dtx,
-                "tx_flood": ftx,
-                "rx_direct": drx,
-                "rx_flood": frx,
-                "rx_errors": re,
-                "total": dtx + ftx + drx + frx,
-            })
+            dtx = _delta(row["direct_tx"],   prev["direct_tx"])
+            ftx = _delta(row["flood_tx"],    prev["flood_tx"])
+            drx = _delta(row["direct_rx"],   prev["direct_rx"])
+            frx = _delta(row["flood_rx"],    prev["flood_rx"])
+            re  = _delta(row["recv_errors"], prev["recv_errors"])
+        else:
+            # First row after boot — the counter started from 0 so the value IS the delta
+            dtx = row["direct_tx"] or 0
+            ftx = row["flood_tx"]  or 0
+            drx = row["direct_rx"] or 0
+            frx = row["flood_rx"]  or 0
+            re  = row["recv_errors"] or 0
+        result.append({
+            "bucket": row["ts"],
+            "tx_direct": dtx,
+            "tx_flood":  ftx,
+            "rx_direct": drx,
+            "rx_flood":  frx,
+            "rx_errors": re,
+            "total": dtx + ftx + drx + frx,
+        })
         prev = row
     return result
 
