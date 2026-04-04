@@ -427,7 +427,7 @@
 
         fetchJSON('/api/v1/device').then(function (d) {
             document.getElementById('di-name').textContent = d.name || '--';
-            document.getElementById('di-hardware') && (document.getElementById('di-hardware').textContent = d.hardware || '--');
+            document.getElementById('di-hardware') && (document.getElementById('di-hardware').textContent = d.board || d.hardware || '--');
             (function(fw) {
                 document.getElementById('di-firmware').textContent = fw ? fw.replace(/^(\d+\.\d+\.\d+).*$/, '$1') : '--';
             })(d.firmware);

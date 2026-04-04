@@ -76,7 +76,7 @@ else
 fi
 echo ""
 
-# --- RepeaterWatch web port ---
+# --- Hardware name ---
 echo -e "  ${BOLD}Step 2/4 — Hardware name${NC}\n"
 info "Name or description of this node's radio hardware."
 info "Examples: Heltec T114, RAK 4631, Ikoka Stick 30dB"
@@ -115,7 +115,7 @@ sleep 3
 header "Step 1/4 — System Dependencies"
 
 apt-get update -qq
-apt-get install -y -qq git python3 python3-venv python3-pip python3-lgpio python3-serial curl
+apt-get install -y -qq git python3 python3-venv python3-pip python3-dev python3-lgpio python3-serial curl
 ok "System packages installed."
 
 # ── Step 2: SerialMux ────────────────────────────────────────────────────────
@@ -202,32 +202,36 @@ header "Step 4/4 — RepeaterWatch"
 
 RW_DIR="/opt/RepeaterWatch"
 
-if ! id meshcoremon &>/dev/null; then
-    useradd -r -s /usr/sbin/nologin -d "$RW_DIR" meshcoremon
-    usermod -aG dialout meshcoremon
-    ok "Service user 'meshcoremon' created."
-else
-    ok "Service user 'meshcoremon' already exists."
-fi
+# RepeaterWatch runs as root — required for:
+#   - /bin/login (Pi terminal via WebSocket)
+#   - GPIO access (radio reset, USB relay, sensors)
+#   - systemd service management (restart services, reboot Pi)
 
 if [[ -d "$RW_DIR/.git" ]]; then
     warn "RepeaterWatch already installed at $RW_DIR — skipping clone."
 else
     info "Cloning RepeaterWatch..."
     git clone -q "$RW_REPO" "$RW_DIR"
-    chown -R meshcoremon:meshcoremon "$RW_DIR"
     ok "Cloned to $RW_DIR"
 fi
 
 if [[ ! -d "$RW_DIR/venv" ]]; then
     info "Creating Python virtual environment..."
-    sudo -u meshcoremon python3 -m venv "$RW_DIR/venv"
+    python3 -m venv "$RW_DIR/venv"
     ok "venv created."
 fi
 
 info "Installing Python dependencies..."
-sudo -u meshcoremon "$RW_DIR/venv/bin/pip" install -q -r "$RW_DIR/requirements.txt"
+"$RW_DIR/venv/bin/pip" install -q -r "$RW_DIR/requirements.txt"
 ok "Python dependencies installed."
+
+# Symlink adafruit-nrfutil into PATH for firmware flashing
+if [[ -f "$RW_DIR/venv/bin/adafruit-nrfutil" ]] && [[ ! -f /usr/local/bin/adafruit-nrfutil ]]; then
+    ln -sf "$RW_DIR/venv/bin/adafruit-nrfutil" /usr/local/bin/adafruit-nrfutil
+    ok "adafruit-nrfutil symlinked to /usr/local/bin."
+elif [[ -f /usr/local/bin/adafruit-nrfutil ]]; then
+    ok "adafruit-nrfutil already in PATH."
+fi
 
 # Symlink lgpio from system packages into venv
 PYVER=$(python3 -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')")
@@ -249,8 +253,8 @@ fi
 if [[ ! -f "$RW_DIR/.env" ]]; then
     SECRET_KEY=$(python3 -c "import secrets; print(secrets.token_hex(32))")
     cat > "$RW_DIR/.env" <<EOF
-# Authentication — set password via setup_auth.py, do not edit hash manually
-MESHCORE_PASSWORD_HASH=
+# Authentication — set password via setup_auth.py or the Settings page
+# MESHCORE_PASSWORD_HASH=
 MESHCORE_SECRET_KEY=$SECRET_KEY
 
 # Serial (via SerialMux virtual port)
@@ -278,16 +282,24 @@ MESHCORE_FIRMWARE_UPLOAD_DIR=/tmp/meshcore-fw
 MESHCORE_TERMINAL_SERIAL_PORT=/dev/ttyV2
 MESHCORE_TERMINAL_SERIAL_BAUD=115200
 
+# Hardware label (shown on dashboard — board type is also auto-detected from serial)
+MESHCORE_HARDWARE=$HARDWARE_NAME
+
+# Login protection (fail2ban-style)
+# MESHCORE_LOGIN_MAX_ATTEMPTS=5
+# MESHCORE_LOGIN_LOCKOUT_SECS=300
+
+# Trusted reverse proxies (comma-separated IPs, e.g. "127.0.0.1,10.0.0.1")
+# MESHCORE_TRUSTED_PROXIES=
+
 # Sensors (all disabled by default — enable in the Sensors tab)
 MESHCORE_SENSOR_POLL=0
-MESHCORE_SENSOR_INA3221=0
-MESHCORE_SENSOR_BME280=0
-MESHCORE_SENSOR_LIS2DW12=0
-MESHCORE_SENSOR_AS3935=0
-MESHCORE_SENSOR_BQ24074=0
-MESHCORE_HARDWARE=$HARDWARE_NAME
+# MESHCORE_SENSOR_INA3221=0
+# MESHCORE_SENSOR_BME280=0
+# MESHCORE_SENSOR_LIS2DW12=0
+# MESHCORE_SENSOR_AS3935=0
+# MESHCORE_SENSOR_BQ24074=0
 EOF
-    chown meshcoremon:meshcoremon "$RW_DIR/.env"
     chmod 640 "$RW_DIR/.env"
     ok ".env written."
 else
@@ -298,19 +310,14 @@ echo ""
 echo -e "  ${BOLD}Set a login password for the web dashboard.${NC}"
 echo -e "  ${CYAN}Leave blank and press Ctrl+C to skip (disables auth).${NC}"
 echo ""
-sudo -u meshcoremon "$RW_DIR/venv/bin/python3" "$RW_DIR/setup_auth.py" || true
+"$RW_DIR/venv/bin/python3" "$RW_DIR/setup_auth.py" || true
 echo ""
 
+# Install systemd service — runs as root (no User= line)
 cp "$RW_DIR/systemd/meshcore-monitor.service" /etc/systemd/system/RepeaterWatch.service
 systemctl daemon-reload
 systemctl enable --now RepeaterWatch
 ok "RepeaterWatch service enabled and started."
-
-cat > /etc/sudoers.d/meshcoremon <<EOF
-meshcoremon ALL=(ALL) NOPASSWD: /usr/bin/systemctl stop SerialMux, /usr/bin/systemctl stop mctomqtt, /usr/bin/systemctl start SerialMux, /usr/bin/systemctl start mctomqtt
-EOF
-chmod 440 /etc/sudoers.d/meshcoremon
-ok "Sudoers configured for firmware flash."
 
 # ── Final status ─────────────────────────────────────────────────────────────
 header "Installation Complete"
@@ -335,7 +342,7 @@ echo -e "    sudo journalctl -u mctomqtt -f"
 echo -e "    sudo journalctl -u SerialMux -f"
 echo ""
 echo -e "  ${BOLD}Change password:${NC}"
-echo -e "    sudo -u meshcoremon $RW_DIR/venv/bin/python3 $RW_DIR/setup_auth.py"
+echo -e "    sudo $RW_DIR/venv/bin/python3 $RW_DIR/setup_auth.py"
 echo -e "    sudo systemctl restart RepeaterWatch"
 echo ""
 ok "All done!"
