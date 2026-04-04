@@ -23,18 +23,18 @@
 
 ## Current Focus
 
-**Hatzic West Pi fully operational on RS232/UART firmware**
+**All three Pis upgraded to sskerry/RepeaterWatch fork**
 
-Three Pis deployed. Hatzic West running RS232 firmware over UART serial, with USB relay
-and DFU flashing confirmed working. Documentation updated for dual connection mode support
-(USB vs serial UART). Security fixes documented for sharing with upstream/forks.
+Home Pi upgraded from original Alderson version using upgrade.sh. All three Pis
+(home, MRP, Hatzic West) now running the same codebase with security fixes, UX
+improvements, and sensor poller fix.
 
 ---
 
 ## Open Work Items
 
 ### Deploy updates to other Pis
-- Home Pi and MRP still on old sensor poller code
+- ~~Home Pi and MRP still on old sensor poller code~~ — Home Pi upgraded (2026-04-04)
 - Serial UART mode is Hatzic-only — other Pis remain on USB mode
 
 ### Hatzic West: Persistent VBUS relay
@@ -92,6 +92,15 @@ and DFU flashing confirmed working. Documentation updated for dual connection mo
 ---
 
 ## Session Notes
+
+### Session 12 — 2026-04-04
+
+**Home Pi upgrade:**
+- Ran upgrade.sh on home Pi (PI_IP) — upgraded from original Alderson version to sskerry/RepeaterWatch
+- Script backed up .env and database, cloned fresh code, updated venv, restarted service
+- All API endpoints returning 200s, dashboard operational
+- Fixed hostname: was incorrectly set to `meshcore-site3`, corrected to `meshcore-site1` via `hostnamectl`
+- All three Pis now running the same sskerry/RepeaterWatch codebase
 
 ### Session 7 — 2026-04-04
 
@@ -302,7 +311,8 @@ and DFU flashing confirmed working. Documentation updated for dual connection mo
 - [x] Dashboard live at http://PI_IP:5000 — reading real device data
 - [x] `adafruit-nrfutil` installed and symlinked to `/usr/local/bin`
 - [x] Firmware flash pipeline tested — hardware sequence works end-to-end
-- [ ] Deploy latest code (sensor poller fix, serial UART docs)
+- [x] Deploy latest code (upgraded via upgrade.sh from Alderson → sskerry fork, 2026-04-04)
+- [x] Hostname fixed: was incorrectly set to meshcore-site3, corrected to meshcore-site1
 - [ ] Wire GPIO 4 → Ikoka RESET pin and test remote reset from dashboard
 
 ---
