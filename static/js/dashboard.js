@@ -1358,7 +1358,15 @@
 
         if (!authSetBtn) return;
 
-        // Fetch current auth status and populate login protection fields
+        var authCardsWrapper = document.getElementById('auth-cards-wrapper');
+
+        function updateAuthCardsVisibility(localMode, authEnabled) {
+            if (authCardsWrapper) {
+                authCardsWrapper.style.display = (localMode && !authEnabled) ? 'none' : '';
+            }
+        }
+
+        // Fetch current auth status and populate fields
         fetchJSON('/api/v1/auth/status').then(function (d) {
             if (d.auth_enabled) {
                 authStatusEl.textContent = 'Enabled (' + d.method + ')';
@@ -1368,7 +1376,6 @@
                 authStatusEl.style.color = 'var(--yellow)';
                 authClearBtn.style.display = 'none';
             }
-            // Populate login protection fields
             var localModeEl = document.getElementById('auth-local-mode');
             var maxEl = document.getElementById('auth-max-attempts');
             var lockEl = document.getElementById('auth-lockout-secs');
@@ -1377,9 +1384,57 @@
             if (maxEl) maxEl.value = d.max_attempts || 5;
             if (lockEl) lockEl.value = d.lockout_secs || 300;
             if (proxyEl) proxyEl.value = d.trusted_proxies || '';
+            updateAuthCardsVisibility(!!d.local_mode, d.auth_enabled);
         }).catch(function () {
             authStatusEl.textContent = 'Unknown';
         });
+
+        // Local mode toggle — show/hide auth cards dynamically
+        var localModeToggle = document.getElementById('auth-local-mode');
+        if (localModeToggle) {
+            localModeToggle.addEventListener('change', function () {
+                updateAuthCardsVisibility(this.checked, !!authStatusEl.style.color.match(/green/));
+            });
+        }
+
+        // Local mode save button
+        var localModeSaveBtn = document.getElementById('auth-local-mode-save-btn');
+        var localModeStatus = document.getElementById('auth-local-mode-status');
+        if (localModeSaveBtn) {
+            localModeSaveBtn.addEventListener('click', function () {
+                var enabled = document.getElementById('auth-local-mode').checked;
+                localModeSaveBtn.disabled = true;
+                localModeStatus.textContent = 'Saving...';
+                localModeStatus.className = 'settings-save-status';
+
+                fetch('/api/v1/auth/settings', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF_TOKEN },
+                    body: JSON.stringify({ local_mode: enabled }),
+                })
+                .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, data: d }; }); })
+                .then(function (resp) {
+                    localModeSaveBtn.disabled = false;
+                    if (resp.ok) {
+                        localModeStatus.textContent = resp.data.restarting ? 'Saved — service restarting...' : 'Saved';
+                        localModeStatus.className = 'settings-save-status success';
+                        if (resp.data.restarting) {
+                            setTimeout(function () { localModeStatus.textContent = 'Service restarted'; }, 4000);
+                        }
+                    } else {
+                        localModeStatus.textContent = resp.data.error || 'Save failed';
+                        localModeStatus.className = 'settings-save-status error';
+                    }
+                    setTimeout(function () { localModeStatus.textContent = ''; }, 5000);
+                })
+                .catch(function () {
+                    localModeSaveBtn.disabled = false;
+                    localModeStatus.textContent = 'Network error';
+                    localModeStatus.className = 'settings-save-status error';
+                    setTimeout(function () { localModeStatus.textContent = ''; }, 3000);
+                });
+            });
+        }
 
         authSetBtn.addEventListener('click', function () {
             var pw = authNewPw.value;
@@ -1468,9 +1523,7 @@
 
         if (authSettingsSaveBtn) {
             authSettingsSaveBtn.addEventListener('click', function () {
-                var localModeCheckbox = document.getElementById('auth-local-mode');
                 var body = {
-                    local_mode: localModeCheckbox ? localModeCheckbox.checked : false,
                     max_attempts: parseInt(document.getElementById('auth-max-attempts').value, 10),
                     lockout_secs: parseInt(document.getElementById('auth-lockout-secs').value, 10),
                     trusted_proxies: document.getElementById('auth-trusted-proxies').value.trim(),

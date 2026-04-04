@@ -864,77 +864,77 @@
 
             <div class="tool-card settings-card">
                 <div class="tool-card-header">
-                    <span class="tool-icon">&#x1F512;</span>
-                    <h3>Authentication</h3>
-                </div>
-                <p class="tool-desc">
-                    Status: <strong id="auth-current-status">checking...</strong>
-                </p>
-                <div class="settings-group">
-                    <label class="settings-label" for="auth-new-pw">New Password</label>
-                    <input type="password" id="auth-new-pw" class="settings-input" placeholder="Min 8 characters" autocomplete="new-password" />
-                </div>
-                <div class="settings-group">
-                    <label class="settings-label" for="auth-confirm-pw">Confirm Password</label>
-                    <input type="password" id="auth-confirm-pw" class="settings-input" placeholder="Re-enter password" autocomplete="new-password" />
-                </div>
-                <div class="card-actions">
-                    <button id="auth-set-btn" class="save-btn">Set Password</button>
-                    <button id="auth-clear-btn" class="danger-btn" style="margin-left:8px;">Disable Auth</button>
-                    <span id="auth-status-msg" class="settings-save-status" style="display:block; margin-top:6px;"></span>
-                </div>
-            </div>
-
-            <div class="tool-card settings-card">
-                <div class="tool-card-header">
-                    <span class="tool-icon">&#x1F6E1;</span>
-                    <h3>Login Protection</h3>
+                    <span class="tool-icon">&#x1F310;</span>
+                    <h3>Access Mode</h3>
                 </div>
                 <div class="settings-group">
                     <div class="settings-row">
-                        <label for="auth-local-mode">Local mode</label>
+                        <label for="auth-local-mode">Local mode — no password required</label>
                         <label class="toggle-switch">
                             <input type="checkbox" id="auth-local-mode" />
                             <span class="toggle-slider"></span>
                         </label>
                     </div>
-                    <p class="tool-desc" style="margin-top:2px; font-size:0.8em;">All features accessible without a password. <strong>Trusted LANs only</strong> — never enable on internet-facing installs.</p>
-                </div>
-                <p class="tool-desc" style="margin-top:8px;">Lock out IPs after repeated failed login attempts.</p>
-                <div class="settings-group">
-                    <div class="settings-row">
-                        <label for="auth-max-attempts">Max failed attempts</label>
-                        <input type="number" id="auth-max-attempts" class="settings-input" style="width:80px;" min="1" max="100" value="5" />
-                    </div>
-                    <div class="settings-row">
-                        <label for="auth-lockout-secs">Lockout duration (seconds)</label>
-                        <input type="number" id="auth-lockout-secs" class="settings-input" style="width:80px;" min="30" max="86400" value="300" />
-                    </div>
-                </div>
-                <div class="settings-group">
-                    <label class="settings-label" for="auth-trusted-proxies">Trusted Proxies</label>
-                    <input type="text" id="auth-trusted-proxies" class="settings-input" placeholder="e.g. 127.0.0.1, 10.0.0.1" spellcheck="false" />
-                    <p class="tool-desc" style="margin-top:4px; font-size:0.8em;">Comma-separated IPs of reverse proxies trusted for X-Forwarded-For headers.</p>
                 </div>
                 <div class="card-actions">
-                    <button id="auth-settings-save-btn" class="save-btn">Save</button>
-                    <span id="auth-settings-status" class="settings-save-status"></span>
+                    <button id="auth-local-mode-save-btn" class="save-btn">Save</button>
+                    <span id="auth-local-mode-status" class="settings-save-status"></span>
                 </div>
             </div>
 
-            <div class="tool-card settings-card" style="border-color: var(--yellow); opacity: 0.85;">
-                <div class="tool-card-header">
-                    <span class="tool-icon">&#x26A0;</span>
-                    <h3>Security Notes</h3>
+            <div id="auth-cards-wrapper">
+                <div class="tool-card settings-card">
+                    <div class="tool-card-header">
+                        <span class="tool-icon">&#x1F512;</span>
+                        <h3>Authentication</h3>
+                    </div>
+                    <p class="tool-desc">
+                        Status: <strong id="auth-current-status">checking...</strong>
+                    </p>
+                    <div class="settings-group">
+                        <label class="settings-label" for="auth-new-pw">New Password</label>
+                        <input type="password" id="auth-new-pw" class="settings-input" placeholder="Min 8 characters" autocomplete="new-password" />
+                    </div>
+                    <div class="settings-group">
+                        <label class="settings-label" for="auth-confirm-pw">Confirm Password</label>
+                        <input type="password" id="auth-confirm-pw" class="settings-input" placeholder="Re-enter password" autocomplete="new-password" />
+                    </div>
+                    <div class="card-actions">
+                        <button id="auth-set-btn" class="save-btn">Set Password</button>
+                        <button id="auth-clear-btn" class="danger-btn" style="margin-left:8px;">Disable Auth</button>
+                        <span id="auth-status-msg" class="settings-save-status" style="display:block; margin-top:6px;"></span>
+                    </div>
                 </div>
-                <ul class="tool-desc" style="margin:0; padding-left:18px; line-height:1.8;">
-                    <li>Always use <strong>HTTPS</strong> (via reverse proxy) when exposing this dashboard to the internet.</li>
-                    <li>CSRF protection is enabled. All write requests require a valid token.</li>
-                    <li>The terminal provides <strong>full shell access</strong> to this device. Keep authentication enabled on public networks.</li>
-                    <li><strong>Local mode</strong> (<code>MESHCORE_LOCAL_MODE=1</code>): allows all features without a password on trusted LANs. Never enable on internet-facing installs.</li>
-                    <li>Without local mode or a password, dangerous actions (terminal, reboot, firmware flash, GPIO) are blocked.</li>
-                </ul>
+
+                <div class="tool-card settings-card">
+                    <div class="tool-card-header">
+                        <span class="tool-icon">&#x1F6E1;</span>
+                        <h3>Login Protection</h3>
+                    </div>
+                    <p class="tool-desc">Lock out IPs after repeated failed login attempts.</p>
+                    <div class="settings-group">
+                        <div class="settings-row">
+                            <label for="auth-max-attempts">Max failed attempts</label>
+                            <input type="number" id="auth-max-attempts" class="settings-input" style="width:80px;" min="1" max="100" value="5" />
+                        </div>
+                        <div class="settings-row">
+                            <label for="auth-lockout-secs">Lockout duration (seconds)</label>
+                            <input type="number" id="auth-lockout-secs" class="settings-input" style="width:80px;" min="30" max="86400" value="300" />
+                        </div>
+                    </div>
+                    <div class="settings-group">
+                        <label class="settings-label" for="auth-trusted-proxies">Trusted Proxies</label>
+                        <input type="text" id="auth-trusted-proxies" class="settings-input" placeholder="e.g. 127.0.0.1, 10.0.0.1" spellcheck="false" />
+                        <p class="tool-desc" style="margin-top:4px; font-size:0.8em;">Comma-separated IPs of reverse proxies trusted for X-Forwarded-For headers.</p>
+                    </div>
+                    <div class="card-actions">
+                        <button id="auth-settings-save-btn" class="save-btn">Save</button>
+                        <span id="auth-settings-status" class="settings-save-status"></span>
+                    </div>
+                </div>
             </div>
+
+            <p class="tool-desc" style="text-align:center; opacity:0.6; margin-top:8px;">Use HTTPS via a reverse proxy when exposing this dashboard to the internet.</p>
 
         </div><!-- /settings-grid -->
 
