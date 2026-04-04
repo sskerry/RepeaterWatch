@@ -1358,12 +1358,13 @@
 
         if (!authSetBtn) return;
 
-        var authCardsWrapper = document.getElementById('auth-cards-wrapper');
+        var authCard = document.getElementById('auth-card');
+        var loginProtectionCard = document.getElementById('login-protection-card');
 
         function updateAuthCardsVisibility(localMode, authEnabled) {
-            if (authCardsWrapper) {
-                authCardsWrapper.style.display = (localMode && !authEnabled) ? 'none' : '';
-            }
+            var hide = localMode && !authEnabled;
+            if (authCard) authCard.style.display = hide ? 'none' : '';
+            if (loginProtectionCard) loginProtectionCard.style.display = hide ? 'none' : '';
         }
 
         // Fetch current auth status and populate fields

@@ -47,7 +47,7 @@
         <button class="tab-btn active" data-tab="meshcore">MeshCore</button>
         <button class="tab-btn" data-tab="raspberry-pi">Raspberry Pi</button>
         <button class="tab-btn" data-tab="sensors">Sensors</button>
-        {% if not auth_enabled or is_authenticated %}
+        {% if is_authenticated or (local_mode and not auth_enabled) %}
         <button class="tab-btn" data-tab="tools">Tools</button>
         <button class="tab-btn" data-tab="settings">Settings</button>
         {% endif %}
@@ -191,7 +191,7 @@
                         <tbody id="neighbors-tbody"></tbody>
                     </table>
                 </div>
-                {% if not auth_enabled or is_authenticated %}
+                {% if is_authenticated or (local_mode and not auth_enabled) %}
                 <div style="text-align:center; margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--border);">
                     <button id="neighbors-delete-btn" class="danger-btn">Delete Neighbours</button>
                     <span id="neighbors-delete-status" class="settings-save-status" style="display:block; margin-top:6px;"></span>
@@ -348,7 +348,7 @@
         <div class="sensor-config-bar">
             <span id="sensor-poll-status" class="sensor-poll-badge sensor-poll-off">Polling Off</span>
             <span id="sensor-active-count" class="sensor-active-count">No sensors enabled</span>
-            {% if not auth_enabled or is_authenticated %}
+            {% if is_authenticated or (local_mode and not auth_enabled) %}
             <button id="sensor-manage-btn" class="sensor-manage-btn">&#x2B; Manage Sensors</button>
             {% endif %}
         </div>
@@ -357,7 +357,7 @@
         <div id="sensor-empty-state" class="sensor-empty-state" style="display:none;">
             <div class="sensor-empty-icon">&#x1F4E1;</div>
             <h3>No Sensors Enabled</h3>
-            {% if not auth_enabled or is_authenticated %}
+            {% if is_authenticated or (local_mode and not auth_enabled) %}
             <p>Click <strong>Manage Sensors</strong> to enable connected hardware.</p>
             <button class="sensor-manage-btn-lg" onclick="document.getElementById('sensor-manage-btn').click()">
                 &#x2B; Add a Sensor
@@ -527,7 +527,7 @@
     <!-- ══════════════════════════════════════════
          Manage Sensors Modal (admin only)
     ══════════════════════════════════════════ -->
-    {% if not auth_enabled or is_authenticated %}
+    {% if is_authenticated or (local_mode and not auth_enabled) %}
     <div id="sensor-modal-overlay" class="sensor-modal-overlay" style="display:none;">
         <div class="sensor-modal">
             <div class="sensor-modal-header">
@@ -882,55 +882,53 @@
                 </div>
             </div>
 
-            <div id="auth-cards-wrapper">
-                <div class="tool-card settings-card">
-                    <div class="tool-card-header">
-                        <span class="tool-icon">&#x1F512;</span>
-                        <h3>Authentication</h3>
+            <div id="auth-card" class="tool-card settings-card">
+                <div class="tool-card-header">
+                    <span class="tool-icon">&#x1F512;</span>
+                    <h3>Authentication</h3>
+                </div>
+                <p class="tool-desc">
+                    Status: <strong id="auth-current-status">checking...</strong>
+                </p>
+                <div class="settings-group">
+                    <label class="settings-label" for="auth-new-pw">New Password</label>
+                    <input type="password" id="auth-new-pw" class="settings-input" placeholder="Min 8 characters" autocomplete="new-password" />
+                </div>
+                <div class="settings-group">
+                    <label class="settings-label" for="auth-confirm-pw">Confirm Password</label>
+                    <input type="password" id="auth-confirm-pw" class="settings-input" placeholder="Re-enter password" autocomplete="new-password" />
+                </div>
+                <div class="card-actions">
+                    <button id="auth-set-btn" class="save-btn">Set Password</button>
+                    <button id="auth-clear-btn" class="danger-btn" style="margin-left:8px;">Disable Auth</button>
+                    <span id="auth-status-msg" class="settings-save-status" style="display:block; margin-top:6px;"></span>
+                </div>
+            </div>
+
+            <div id="login-protection-card" class="tool-card settings-card">
+                <div class="tool-card-header">
+                    <span class="tool-icon">&#x1F6E1;</span>
+                    <h3>Login Protection</h3>
+                </div>
+                <p class="tool-desc">Lock out IPs after repeated failed login attempts.</p>
+                <div class="settings-group">
+                    <div class="settings-row">
+                        <label for="auth-max-attempts">Max failed attempts</label>
+                        <input type="number" id="auth-max-attempts" class="settings-input" style="width:80px;" min="1" max="100" value="5" />
                     </div>
-                    <p class="tool-desc">
-                        Status: <strong id="auth-current-status">checking...</strong>
-                    </p>
-                    <div class="settings-group">
-                        <label class="settings-label" for="auth-new-pw">New Password</label>
-                        <input type="password" id="auth-new-pw" class="settings-input" placeholder="Min 8 characters" autocomplete="new-password" />
-                    </div>
-                    <div class="settings-group">
-                        <label class="settings-label" for="auth-confirm-pw">Confirm Password</label>
-                        <input type="password" id="auth-confirm-pw" class="settings-input" placeholder="Re-enter password" autocomplete="new-password" />
-                    </div>
-                    <div class="card-actions">
-                        <button id="auth-set-btn" class="save-btn">Set Password</button>
-                        <button id="auth-clear-btn" class="danger-btn" style="margin-left:8px;">Disable Auth</button>
-                        <span id="auth-status-msg" class="settings-save-status" style="display:block; margin-top:6px;"></span>
+                    <div class="settings-row">
+                        <label for="auth-lockout-secs">Lockout duration (seconds)</label>
+                        <input type="number" id="auth-lockout-secs" class="settings-input" style="width:80px;" min="30" max="86400" value="300" />
                     </div>
                 </div>
-
-                <div class="tool-card settings-card">
-                    <div class="tool-card-header">
-                        <span class="tool-icon">&#x1F6E1;</span>
-                        <h3>Login Protection</h3>
-                    </div>
-                    <p class="tool-desc">Lock out IPs after repeated failed login attempts.</p>
-                    <div class="settings-group">
-                        <div class="settings-row">
-                            <label for="auth-max-attempts">Max failed attempts</label>
-                            <input type="number" id="auth-max-attempts" class="settings-input" style="width:80px;" min="1" max="100" value="5" />
-                        </div>
-                        <div class="settings-row">
-                            <label for="auth-lockout-secs">Lockout duration (seconds)</label>
-                            <input type="number" id="auth-lockout-secs" class="settings-input" style="width:80px;" min="30" max="86400" value="300" />
-                        </div>
-                    </div>
-                    <div class="settings-group">
-                        <label class="settings-label" for="auth-trusted-proxies">Trusted Proxies</label>
-                        <input type="text" id="auth-trusted-proxies" class="settings-input" placeholder="e.g. 127.0.0.1, 10.0.0.1" spellcheck="false" />
-                        <p class="tool-desc" style="margin-top:4px; font-size:0.8em;">Comma-separated IPs of reverse proxies trusted for X-Forwarded-For headers.</p>
-                    </div>
-                    <div class="card-actions">
-                        <button id="auth-settings-save-btn" class="save-btn">Save</button>
-                        <span id="auth-settings-status" class="settings-save-status"></span>
-                    </div>
+                <div class="settings-group">
+                    <label class="settings-label" for="auth-trusted-proxies">Trusted Proxies</label>
+                    <input type="text" id="auth-trusted-proxies" class="settings-input" placeholder="e.g. 127.0.0.1, 10.0.0.1" spellcheck="false" />
+                    <p class="tool-desc" style="margin-top:4px; font-size:0.8em;">Comma-separated IPs of reverse proxies trusted for X-Forwarded-For headers.</p>
+                </div>
+                <div class="card-actions">
+                    <button id="auth-settings-save-btn" class="save-btn">Save</button>
+                    <span id="auth-settings-status" class="settings-save-status"></span>
                 </div>
             </div>
 
