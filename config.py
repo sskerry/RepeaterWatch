@@ -29,6 +29,10 @@ MAX_QUERY_HOURS = 720  # 30 days
 SECRET_KEY = os.environ.get("MESHCORE_SECRET_KEY", None)
 PASSWORD = os.environ.get("MESHCORE_PASSWORD", None)
 
+# Local mode: when enabled, all endpoints are accessible without authentication.
+# WARNING: Only use this on trusted local networks. Never enable on public-facing installs.
+LOCAL_MODE = os.environ.get("MESHCORE_LOCAL_MODE", "0") == "1"
+
 # Fail2ban: lock out IPs after too many failed login attempts
 LOGIN_MAX_ATTEMPTS = int(os.environ.get("MESHCORE_LOGIN_MAX_ATTEMPTS", "5"))
 LOGIN_LOCKOUT_SECS = int(os.environ.get("MESHCORE_LOGIN_LOCKOUT_SECS", "300"))

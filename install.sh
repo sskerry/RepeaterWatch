@@ -127,9 +127,31 @@ sleep 3
 # ── Step 1: System dependencies ──────────────────────────────────────────────
 header "Step 1/4 — System Dependencies"
 
+info "Updating package lists..."
 apt-get update -qq
-apt-get install -y -qq git python3 python3-venv python3-pip python3-dev python3-lgpio python3-serial curl
+ok "Package lists updated."
+
+info "Installing system packages..."
+apt-get install -y -qq \
+    git \
+    python3 python3-venv python3-pip python3-dev \
+    python3-lgpio python3-serial \
+    curl \
+    i2c-tools \
+    || { err "Failed to install system packages."; exit 1; }
 ok "System packages installed."
+
+# Enable I2C interface if not already enabled (needed for sensors)
+if ! grep -q "^dtparam=i2c_arm=on" /boot/firmware/config.txt 2>/dev/null \
+   && ! grep -q "^dtparam=i2c_arm=on" /boot/config.txt 2>/dev/null; then
+    # Try the new firmware path first (Bookworm+), fall back to legacy
+    BOOT_CONFIG="/boot/firmware/config.txt"
+    [[ ! -f "$BOOT_CONFIG" ]] && BOOT_CONFIG="/boot/config.txt"
+    if [[ -f "$BOOT_CONFIG" ]]; then
+        echo "dtparam=i2c_arm=on" >> "$BOOT_CONFIG"
+        ok "I2C enabled in $BOOT_CONFIG (takes effect after reboot)."
+    fi
+fi
 
 # ── Step 2: SerialMux ────────────────────────────────────────────────────────
 header "Step 2/4 — SerialMux"
@@ -270,6 +292,10 @@ if [[ ! -f "$RW_DIR/.env" ]]; then
 # MESHCORE_PASSWORD_HASH=
 MESHCORE_SECRET_KEY=$SECRET_KEY
 
+# Local mode: set to 1 to allow all features without a password.
+# WARNING: Only use on trusted local networks. NEVER enable on internet-facing installs.
+MESHCORE_LOCAL_MODE=0
+
 # Serial (via SerialMux virtual port)
 MESHCORE_SERIAL_PORT=/dev/ttyV0
 MESHCORE_SERIAL_BAUD=115200
@@ -320,10 +346,21 @@ else
 fi
 
 echo ""
-echo -e "  ${BOLD}Set a login password for the web dashboard.${NC}"
-echo -e "  ${CYAN}Leave blank and press Ctrl+C to skip (disables auth).${NC}"
+echo -e "  ${BOLD}Dashboard access mode:${NC}\n"
+echo -e "    ${BOLD}1${NC}) Set a login password (recommended for remote/public access)"
+echo -e "    ${BOLD}2${NC}) Local mode — no password, all features open (trusted LAN only)"
 echo ""
-"$RW_DIR/venv/bin/python3" "$RW_DIR/setup_auth.py" || true
+echo -en "${CYAN}?${NC}  Select [1]: "; read -r AUTH_CHOICE </dev/tty
+AUTH_CHOICE="${AUTH_CHOICE:-1}"
+
+if [[ "$AUTH_CHOICE" == "2" ]]; then
+    sed -i 's/^MESHCORE_LOCAL_MODE=.*/MESHCORE_LOCAL_MODE=1/' "$RW_DIR/.env"
+    warn "Local mode enabled — dashboard is fully open without a password."
+    warn "Do NOT expose this to the internet without setting a password first."
+else
+    echo ""
+    "$RW_DIR/venv/bin/python3" "$RW_DIR/setup_auth.py" || true
+fi
 echo ""
 
 # Install systemd service — runs as root (no User= line)

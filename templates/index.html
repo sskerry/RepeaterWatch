@@ -36,6 +36,12 @@
         {% endif %}
     </header>
 
+    {% if local_mode and not auth_enabled %}
+    <div style="background: #b8860b; color: #fff; text-align: center; padding: 8px 16px; font-size: 0.85rem; font-weight: 600;">
+        LOCAL MODE — No authentication required. Do not expose to the internet without setting a password.
+    </div>
+    {% endif %}
+
     <!-- Tab Bar -->
     <nav id="tab-bar">
         <button class="tab-btn active" data-tab="meshcore">MeshCore</button>
@@ -914,8 +920,9 @@
                 <ul class="tool-desc" style="margin:0; padding-left:18px; line-height:1.8;">
                     <li>Always use <strong>HTTPS</strong> (via reverse proxy) when exposing this dashboard to the internet.</li>
                     <li>CSRF protection is enabled. All write requests require a valid token.</li>
-                    <li>The terminal provides <strong>full shell access</strong> to this device. Keep authentication enabled.</li>
-                    <li>Dangerous actions (terminal, reboot, firmware flash, GPIO) are blocked until a password is set.</li>
+                    <li>The terminal provides <strong>full shell access</strong> to this device. Keep authentication enabled on public networks.</li>
+                    <li><strong>Local mode</strong> (<code>MESHCORE_LOCAL_MODE=1</code>): allows all features without a password on trusted LANs. Never enable on internet-facing installs.</li>
+                    <li>Without local mode or a password, dangerous actions (terminal, reboot, firmware flash, GPIO) are blocked.</li>
                 </ul>
             </div>
 

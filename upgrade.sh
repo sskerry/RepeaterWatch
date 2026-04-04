@@ -225,6 +225,7 @@ add_if_missing() {
 }
 
 add_if_missing "MESHCORE_SECRET_KEY" "$(python3 -c 'import secrets; print(secrets.token_hex(32))')" "Secret key for session cookies"
+add_if_missing "MESHCORE_LOCAL_MODE" "0" "Local mode: set to 1 for trusted LANs (no password required)"
 add_if_missing "MESHCORE_TERMINAL_SERIAL_PORT" "/dev/ttyV2" "Terminal (serial console via WebSocket)"
 add_if_missing "MESHCORE_TERMINAL_SERIAL_BAUD" "115200"
 add_if_missing "MESHCORE_FIRMWARE_UPLOAD_DIR" "/tmp/meshcore-fw" "Firmware flash"
