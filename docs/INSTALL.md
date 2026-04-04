@@ -43,6 +43,9 @@ The `install.sh` script asks which mode you're using and configures everything a
 
 **If you're unsure, choose USB mode** — it's the default and works with standard firmware.
 
+Serial/UART mode has only been tested with the Ikoka Stick (Seeed XIAO nRF52840) but may
+work with other nRF-based MeshCore radios that support the RS232 firmware.
+
 For serial/UART mode, see `docs/gpio-wiring.md` (Note 6) for the physical wiring details.
 The Pi's UART port (`/dev/ttyAMA0`) can be claimed by three things that must be dealt with:
 1. **Kernel serial console** — sends boot messages to the UART (removed from `cmdline.txt`)

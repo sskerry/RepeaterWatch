@@ -66,7 +66,7 @@ I2C sensors (BME280, INA3221) use the Pi's fixed I2C pins (GPIO 2/3, physical pi
 
 The USB relay controls the VBUS (5V power) line on the USB cable between the Pi and the radio. USB data lines (D+/D-) remain connected at all times.
 
-**Requires serial/UART mode.** The nRF52840's USB controller will not enumerate without VBUS, so cutting VBUS on standard USB firmware kills your serial connection entirely. With the RS232/UART firmware, serial communication goes over the Pi's UART pins instead, so VBUS can be safely switched without losing contact with the radio.
+**Requires serial/UART mode.** The nRF52840's USB controller will not enumerate without VBUS, so cutting VBUS on standard USB firmware kills your serial connection entirely. With the RS232/UART firmware, serial communication goes over the Pi's UART pins instead, so VBUS can be safely switched without losing contact with the radio. This has only been tested with the Ikoka Stick (XIAO nRF52840) but may work with other nRF-based radios.
 
 **Why?** Many MeshCore radio boards have an onboard charger that activates when USB power is present. If you're using an external charge controller (like the BQ24074), you want VBUS disconnected during normal operation so the external charger manages the battery. The relay lets you cut VBUS for normal use and reconnect it only when needed for DFU firmware flashing (which requires the radio to detect a USB host).
 

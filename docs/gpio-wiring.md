@@ -343,7 +343,8 @@ pin, and vice versa. Both sides are 3.3V, so no level shifter or resistors are n
 
 The `install.sh` script handles this automatically when you choose "Serial (UART)" mode.
 
-**STATUS: Confirmed working on meshcore-site3 (Nebra conversion)**
+**STATUS: Confirmed working on meshcore-site3 (Nebra conversion, Ikoka Stick / XIAO nRF52840)**
+Not yet tested with other nRF-based radios, but should work with any that support the RS232 firmware.
 
 ---
 
