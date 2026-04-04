@@ -8,6 +8,7 @@ import time
 
 from flask import Flask, jsonify, redirect, render_template, request, session, url_for
 from flask_sock import Sock
+from flask_wtf.csrf import CSRFProtect
 
 import config
 # Methods that require authentication even on public installs
@@ -86,6 +87,10 @@ def create_app() -> Flask:
     if config.TRUSTED_PROXIES:
         # If behind a proxy, assume HTTPS termination
         app.config["SESSION_COOKIE_SECURE"] = True
+
+    # CSRF protection — rejects POST/PUT/DELETE/PATCH without a valid token.
+    # JavaScript reads the token from a <meta> tag and sends it as X-CSRFToken.
+    csrf = CSRFProtect(app)
 
     # Limit upload size to 16MB (firmware .zip files are typically ~500KB)
     app.config["MAX_CONTENT_LENGTH"] = 16 * 1024 * 1024

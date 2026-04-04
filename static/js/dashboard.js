@@ -379,10 +379,24 @@
         }
     }
 
+    // ── CSRF Token ───────────────────────────────────────
+    // Read once from the <meta> tag that Flask injects on page load.
+    var CSRF_TOKEN = (function () {
+        var meta = document.querySelector('meta[name="csrf-token"]');
+        return meta ? meta.getAttribute('content') : '';
+    })();
+
     // ── API Fetchers ─────────────────────────────────────
 
-    function fetchJSON(url) {
-        return fetch(url).then(function (r) {
+    function fetchJSON(url, opts) {
+        // If opts are provided (for POST/PUT/DELETE), inject the CSRF header
+        if (opts) {
+            opts.headers = opts.headers || {};
+            if (typeof opts.headers === 'object' && !opts.headers['X-CSRFToken']) {
+                opts.headers['X-CSRFToken'] = CSRF_TOKEN;
+            }
+        }
+        return fetch(url, opts).then(function (r) {
             if (r.status === 401) {
                 // On write operations from admin tab, redirect to login
                 // On read operations from public tabs, just fail silently
@@ -727,7 +741,7 @@
             document.getElementById('fw-modal-footer').style.display = 'none';
             showFwStatus('flashing', 'Uploading...');
 
-            fetch('/api/v1/firmware/flash', { method: 'POST', body: formData })
+            fetch('/api/v1/firmware/flash', { method: 'POST', body: formData, headers: { 'X-CSRFToken': CSRF_TOKEN } })
                 .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, data: d }; }); })
                 .then(function (resp) {
                     if (!resp.ok) {
@@ -764,7 +778,7 @@
                 btn.disabled = true;
                 var origText = btn.textContent;
                 btn.textContent = label + 'ing...';
-                fetch('/api/v1/services/' + encodeURIComponent(name) + '/' + action, { method: 'POST' })
+                fetch('/api/v1/services/' + encodeURIComponent(name) + '/' + action, { method: 'POST', headers: { 'X-CSRFToken': CSRF_TOKEN } })
                     .then(function (r) { return r.json(); })
                     .then(function () {
                         btn.textContent = label + 'ed';
@@ -789,7 +803,7 @@
             var btn = this;
             btn.disabled = true;
             btn.textContent = 'Rebooting...';
-            fetch('/api/v1/system/reboot', { method: 'POST' })
+            fetch('/api/v1/system/reboot', { method: 'POST', headers: { 'X-CSRFToken': CSRF_TOKEN } })
                 .then(function (r) { return r.json(); })
                 .catch(noop);
         });
@@ -801,7 +815,7 @@
             var btn = this;
             btn.disabled = true;
             btn.textContent = 'Resetting...';
-            fetch('/api/v1/radio/reset', { method: 'POST' })
+            fetch('/api/v1/radio/reset', { method: 'POST', headers: { 'X-CSRFToken': CSRF_TOKEN } })
                 .then(function (r) { return r.json(); })
                 .then(function () {
                     btn.textContent = 'Reset sent';
@@ -818,7 +832,7 @@
             var btn = this;
             btn.disabled = true;
             btn.textContent = 'Entering bootloader...';
-            fetch('/api/v1/radio/bootloader', { method: 'POST' })
+            fetch('/api/v1/radio/bootloader', { method: 'POST', headers: { 'X-CSRFToken': CSRF_TOKEN } })
                 .then(function (r) { return r.json(); })
                 .then(function () {
                     btn.textContent = 'Bootloader active';
@@ -875,7 +889,7 @@
 
             fetch('/api/v1/radio/usb', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF_TOKEN },
                 body: JSON.stringify({ enabled: newState }),
             })
             .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, data: d }; }); })
@@ -918,7 +932,7 @@
 
             fetch('/api/v1/bq24074/charging', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF_TOKEN },
                 body: JSON.stringify({ enabled: newState }),
             })
             .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, data: d }; }); })
@@ -1206,7 +1220,7 @@
 
             fetch('/api/v1/settings', {
                 method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF_TOKEN },
                 body: JSON.stringify(body),
             })
             .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, data: d }; }); })
@@ -1247,7 +1261,7 @@
 
             fetch('/api/v1/settings', {
                 method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF_TOKEN },
                 body: JSON.stringify(body),
             })
             .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, data: d }; }); })
@@ -1281,7 +1295,7 @@
             dbStatusEl.textContent = 'Deleting...';
             dbStatusEl.className = 'settings-save-status';
 
-            fetch('/api/v1/database/reset', { method: 'POST' })
+            fetch('/api/v1/database/reset', { method: 'POST', headers: { 'X-CSRFToken': CSRF_TOKEN } })
             .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, data: d }; }); })
             .then(function (resp) {
                 dbResetBtn.disabled = false;
@@ -1313,7 +1327,7 @@
             nbDeleteBtn.disabled = true;
             nbStatusEl.textContent = 'Deleting...';
             nbStatusEl.className = 'settings-save-status';
-            fetch('/api/v1/neighbors/delete', { method: 'POST' })
+            fetch('/api/v1/neighbors/delete', { method: 'POST', headers: { 'X-CSRFToken': CSRF_TOKEN } })
             .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, data: d }; }); })
             .then(function (resp) {
                 nbDeleteBtn.disabled = false;
@@ -1386,7 +1400,7 @@
 
             fetch('/api/v1/auth/password', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF_TOKEN },
                 body: JSON.stringify({ password: pw }),
             })
             .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, data: d }; }); })
@@ -1421,7 +1435,7 @@
             authMsg.textContent = 'Disabling auth...';
             authMsg.className = 'settings-save-status';
 
-            fetch('/api/v1/auth/clear', { method: 'POST' })
+            fetch('/api/v1/auth/clear', { method: 'POST', headers: { 'X-CSRFToken': CSRF_TOKEN } })
             .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, data: d }; }); })
             .then(function (resp) {
                 authClearBtn.disabled = false;
@@ -1475,7 +1489,7 @@
 
                 fetch('/api/v1/auth/settings', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF_TOKEN },
                     body: JSON.stringify(body),
                 })
                 .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, data: d }; }); })

@@ -17,7 +17,18 @@
 
     var _config = {};
 
+    var CSRF_TOKEN = (function () {
+        var meta = document.querySelector('meta[name="csrf-token"]');
+        return meta ? meta.getAttribute('content') : '';
+    })();
+
     function fetchJSON(url, opts) {
+        if (opts) {
+            opts.headers = opts.headers || {};
+            if (!opts.headers['X-CSRFToken']) {
+                opts.headers['X-CSRFToken'] = CSRF_TOKEN;
+            }
+        }
         return fetch(url, opts).then(function (r) { return r.json(); });
     }
 
