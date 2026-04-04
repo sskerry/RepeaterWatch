@@ -12,58 +12,101 @@
 |---|------|--------|
 | 0 | Git/GitHub setup | ✅ Done — public fork (sskerry/RepeaterWatch), upstream remote |
 | 1 | Understand the codebase | ✅ Done |
-| 2 | Clean install documentation | ✅ Done — docs/INSTALL.md + install.sh automated installer |
+| 2 | Clean install documentation | ✅ Done — docs/INSTALL.md + install.sh (supports USB and serial UART) |
 | 3 | Get it running on repeater hardware | ✅ 3 Pis deployed (home, MRP, Hatzic West) |
 | 4 | Explore sensors and GPIO | ✅ BQ24074 charger working on Hatzic. GPIO wiring doc complete |
 | 5 | Customize for CLUB1 / CLUB2 | ⬜ Not started |
 | 6 | Maintain clean upstream upgrade path | ✅ Ongoing — no core file customizations |
+| 7 | Security hardening | ✅ Done — 9 vulnerabilities fixed (see docs/security-fixes.md) |
 
 ---
 
 ## Current Focus
 
-**Hatzic West Pi deployed, RS232 bridge firmware build in progress**
+**Hatzic West Pi fully operational on RS232/UART firmware**
 
-Three Pis fully deployed and operational. Hatzic West (Nebra conversion) needs custom
-MeshCore firmware with RS232 bridge to use UART instead of USB serial (VBUS required for
-USB enumeration, relay cuts VBUS by design). Sensor poller bug found — needs fix.
+Three Pis deployed. Hatzic West running RS232 firmware over UART serial, with USB relay
+and DFU flashing confirmed working. Documentation updated for dual connection mode support
+(USB vs serial UART). Security fixes documented for sharing with upstream/forks.
 
 ---
 
 ## Open Work Items
 
-### Bug: Sensor poller ignores individual enable/disable flags
-- **File:** `collector/sensor_poller.py`
-- **Problem:** When `MESHCORE_SENSOR_POLL=1`, ALL sensors are polled every tick regardless of individual `MESHCORE_SENSOR_*=0` flags. The individual flags are only used by the Settings UI toggles, never checked by the poller.
-- **Symptom:** LIS2DW12 throws I2C errors every 5 seconds even though `MESHCORE_SENSOR_LIS2DW12=0`
-- **Fix:** Add `config.SENSOR_*_ENABLED` flags to `config.py` (read from env), check them in `_run_loop()` before calling each `_poll_*` method. Also update startup log to distinguish "disabled" vs "library missing".
-- **Affected sensors:** All five (INA3221, BME280, LIS2DW12, AS3935, BQ24074)
-
-### Hatzic West: RS232 bridge firmware
-- **Status:** Briefing created at `~/Nextcloud/claude/meshcore-rs232/CLAUDE.md`
-- **Goal:** Build Ikoka Stick repeater firmware with RS232 bridge (UART on D6/D7)
-- **Why:** Relay cuts VBUS, nRF52840 needs VBUS for USB — UART bypasses this entirely
-- **Wiring:** Already done (D6→Pi Pin 10, D7→Pi Pin 8, GND→Pin 14)
-- **After flash:** Enable bridge, switch SerialMux REAL_PORT from ttyACM0 to ttyAMA0
-
-### Hatzic West: USB relay wiring
-- **Current:** NO (normally open) — VBUS cut by default, stick doesn't enumerate
-- **Workaround:** gpioset holds GPIO 17 high (dies on reboot)
-- **If RS232 firmware works:** Relay stays as-is (VBUS only needed for flashing)
-- **If RS232 firmware doesn't work:** Swap relay from NO to NC (one wire move)
-
-### Update gpio-wiring.md with confirmed findings
-- VBUS IS required for nRF52840 USB enumeration — update Note 2 to mark as CONFIRMED
-- D6/D7 are I2C (OLED) in stock firmware, not UART — document this
-- Add Nebra pin remapping as a variant section
-
 ### Deploy updates to other Pis
-- Sensor poller fix (once built) needs to go to all three Pis
 - Home Pi and MRP still on old sensor poller code
+- Serial UART mode is Hatzic-only — other Pis remain on USB mode
+
+### Hatzic West: Persistent VBUS relay
+- **Current:** `gpioset -z --chip gpiochip0 17=1` holds GPIO 17 high (dies on reboot)
+- **Needed:** Make GPIO 17 HIGH persistent across reboots (systemd unit or rc.local)
+- With RS232 firmware, VBUS is only needed for DFU flashing — not for normal serial
+
+### Hatzic West: Set radio name and coordinates
+- Name is generic "Ikoka Stick Repeater" — should be site-specific
+- GPS coordinates are 0.0, 0.0 — need to set actual Hatzic West location
+
+---
+
+## Completed This Session (2026-04-04)
+
+### RS232/UART firmware investigation and setup
+- SSH'd into Hatzic West Pi, found radio not responding to serial commands
+- Diagnosed: RS232 firmware talks over UART pins, not USB CDC — confirmed by testing all ports/bauds
+- Found UART wiring already in place (Pi pins 8/10/GND to XIAO D6/D7/GND)
+- Freed Pi UART from three competing claims:
+  1. **Kernel serial console** — removed `console=serial0,115200` from cmdline.txt
+  2. **serial-getty** — already inactive on this Pi
+  3. **Bluetooth** — not checked (Nebra board may not have BT)
+- Switched SerialMux REAL_PORT from USB by-id path to `/dev/ttyAMA0`
+- Rebooted, confirmed UART communication working at 115200 baud
+- Radio responding: v1.14.0, Ikoka Stick-E22-30dBm, all commands working
+
+### Radio frequency corrected
+- Was on 869.6 MHz (European preset) — set to USA/Canada: 910.525 MHz, BW 62.5, SF 7, CR 5
+- Command: `set radio 910.525,62.5,7,5` followed by GPIO 4 reset pulse
+- Verified with `get radio` after reboot
+
+### DFU firmware flashing via relay — CONFIRMED WORKING
+- USB relay (GPIO 17) controls VBUS to the XIAO nRF52840
+- DFU mode entry via GPIO 4 double-pulse + VBUS relay ON works end-to-end
+- Firmware can be flashed over USB DFU while serial communication continues over UART
+- **This confirms the USB relay requires RS232/UART firmware** — standard USB firmware loses serial when VBUS is cut
+
+### Documentation updated for dual connection mode
+- **install.sh** — new Step 1/5 asks USB vs Serial, handles kernel config (console, getty, Bluetooth), reboot prompt
+- **docs/INSTALL.md** — connection mode comparison table, serial setup steps, troubleshooting
+- **docs/gpio-wiring.md** — UART wiring (Note 6), USB relay requires RS232 firmware (Note 2 updated with confirmed findings)
+- **README.md** — architecture diagram for both modes, USB relay firmware requirement noted
+
+### Security fixes documented
+- Created `docs/security-fixes.md` listing 9 vulnerabilities found and fixed
+- Auth model clarified: no password = full access with warning badge (trusted LAN mode), password set = login required for writes
+- For sharing with Jesse (jjkroell) and upstream (MrAlders0n)
+
+### New public key recorded
+- Firmware reflash generated new keypair
+- Old: `EF7C11249040B2F2C7D37874708C1B385EEABC81DF689478066F6ACA87E77209`
+- New: `C495BB6782BC12B447CB3F10BCFE62F163C20649DF4F9BBF40C89A1F2FC5CF04`
 
 ---
 
 ## Session Notes
+
+### Session 7 — 2026-04-04
+
+**Hatzic West UART serial mode:**
+- RS232 firmware (feature/console-serial1 branch) communicates over UART, not USB CDC
+- Pi UART freed from kernel console and serial-getty
+- SerialMux pointed to /dev/ttyAMA0, all services operational
+- Radio set to USA/Canada frequency plan (910.525 MHz)
+- DFU flashing via USB relay confirmed working with RS232 firmware
+
+**Documentation overhaul for dual connection mode:**
+- install.sh now supports USB and Serial (UART) with interactive prompts
+- All docs updated: INSTALL.md, gpio-wiring.md, README.md
+- Security fixes documented in docs/security-fixes.md (9 vulnerabilities)
+- Auth model accurately described: open with warning on trusted LANs, locked when password set
 
 ### Session 6 — 2026-03-28
 
@@ -113,7 +156,7 @@ USB enumeration, relay cuts VBUS by design). Sensor poller bug found — needs f
 - Flashing: relay turns ON → VBUS connected → nRF52840 detects host power → enumerates as DFU device
 - Relay stays ON for entire flash, turns OFF when done
 - Note 2 in gpio-wiring.md updated with full theory and confirmation checklist
-- **Status: UNCONFIRMED — awaiting official confirmation from MrAlders0n; test build planned**
+- **UPDATE (2026-04-04): DFU via relay CONFIRMED WORKING on Hatzic West with RS232 firmware**
 
 **New deployment: meshcore-site2 (Compute Module 3, PI_IP)**
 - Re-flashed to 64-bit Raspberry Pi OS (trixie) — matches home Pi architecture (aarch64)
@@ -207,6 +250,8 @@ USB enumeration, relay cuts VBUS by design). Sensor poller bug found — needs f
 | 2026-03-11 | Use `Wants=` instead of `Requires=` for SerialMux in service file | Allows RepeaterWatch to start with no radio; also required permanently — firmware flash stops SerialMux intentionally, so `Requires=` would crash RepeaterWatch mid-flash |
 | 2026-03-11 | Use same SSH key (`YOUR_SSH_KEY`) for all Pi installs | Simplifies access — one key works everywhere |
 | 2026-03-11 | Recommend 64-bit OS for all Pi deployments | Matches home Pi exactly, avoids architecture differences in lgpio symlinks and pip builds |
+| 2026-04-04 | USB relay requires RS232/UART firmware | nRF52840 won't enumerate without VBUS — cutting VBUS on USB firmware kills serial. UART firmware bypasses this. |
+| 2026-04-04 | USA/Canada frequency: 910.525 MHz, BW 62.5, SF 7, CR 5 | MeshCore community standard for North America |
 
 ---
 
@@ -214,10 +259,28 @@ USB enumeration, relay cuts VBUS by design). Sensor poller bug found — needs f
 
 - Will the Pi have internet access at the mountain repeater site for initial setup?
 - What network/IP scheme is used at the site — how will the dashboard be accessed remotely?
-- USB relay circuit (GPIO 17): working theory documented (VBUS-only, NO/COM) — awaiting official confirmation from MrAlders0n; test build planned
 - meshcore-site2: what will the permanent IP be once assigned?
 - meshcore-site2: mctomqtt credentials and config — needed when radio is connected
 - Home Pi SD card is 8 GB (77% used after cleanup) — consider upgrading to 32 GB before site deployment
+
+---
+
+## Install Checklist (Hatzic West — meshcore-site3, PI_IP)
+
+- [x] Pi running 64-bit Raspberry Pi OS (Nebra miner conversion)
+- [x] SSH enabled, `claude` user with passwordless sudo
+- [x] SerialMux installed, configured for `/dev/ttyAMA0` (UART serial mode)
+- [x] Kernel serial console removed from cmdline.txt
+- [x] RepeaterWatch installed, service running
+- [x] BQ24074 charger GPIOs remapped (27/22/23 for Nebra board)
+- [x] UART wiring connected (Pi pins 8/10/GND to XIAO D6/D7/GND)
+- [x] RS232 firmware flashed and responding (v1.14.0)
+- [x] Radio set to USA/Canada frequency (910.525 MHz)
+- [x] DFU flashing via USB relay confirmed working
+- [x] Dashboard live at http://PI_IP:5000
+- [ ] Make GPIO 17 (VBUS relay) persistent across reboots
+- [ ] Set radio name and GPS coordinates for Hatzic West site
+- [ ] Install and configure mctomqtt
 
 ---
 
@@ -239,9 +302,8 @@ USB enumeration, relay cuts VBUS by design). Sensor poller bug found — needs f
 - [x] Dashboard live at http://PI_IP:5000 — reading real device data
 - [x] `adafruit-nrfutil` installed and symlinked to `/usr/local/bin`
 - [x] Firmware flash pipeline tested — hardware sequence works end-to-end
+- [ ] Deploy latest code (sensor poller fix, serial UART docs)
 - [ ] Wire GPIO 4 → Ikoka RESET pin and test remote reset from dashboard
-- [ ] Retry full firmware flash (adafruit-nrfutil now installed — should complete)
-- [ ] Write up full install process as `docs/INSTALL.md`
 
 ---
 
@@ -269,7 +331,7 @@ USB enumeration, relay cuts VBUS by design). Sensor poller bug found — needs f
 
 ---
 
-## SerialMux Port Assignments (home Pi)
+## SerialMux Port Assignments (all Pis)
 
 | Virtual Port | Assigned To | Purpose |
 |---|---|---|
@@ -281,7 +343,7 @@ USB enumeration, relay cuts VBUS by design). Sensor poller bug found — needs f
 
 ## Notes on Upstream Updates
 
-**MYCALL's repo (private):** `https://github.com/sskerry/RepeaterWatch`
+**MYCALL's repo:** `https://github.com/sskerry/RepeaterWatch`
 **Upstream (original, public):** `https://github.com/MrAlders0n/RepeaterWatch` — tracked as a Git remote called `upstream`.
 
 To pull future upstream changes without losing local work:
