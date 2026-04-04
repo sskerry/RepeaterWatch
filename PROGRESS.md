@@ -1,8 +1,8 @@
 # RepeaterWatch — Project Progress
 
 **Owner:** MYCALL (representing CLUB1 and CLUB2)
-**Hardware target:** Raspberry Pi 4 + Ikoka stick MeshCore device
-**Last updated:** 2026-03-28
+**Hardware target:** Raspberry Pi + Ikoka stick MeshCore device
+**Last updated:** 2026-04-04
 
 ---
 
@@ -10,24 +10,56 @@
 
 | # | Goal | Status |
 |---|------|--------|
-| 0 | Git/GitHub setup | ✅ Done — private repo, SSH keys, remotes configured |
-| 1 | Understand the codebase | ✅ Done — see notes below |
-| 2 | Clean install documentation | ✅ Done — docs/INSTALL.md written and validated |
-| 3 | Get it running on repeater hardware | ✅ Done on home Pi — all three services running |
-| 4 | Explore sensors and GPIO | 🔄 In progress — GPIO wiring doc created, reset pin confirmed |
+| 0 | Git/GitHub setup | ✅ Done — public fork (sskerry/RepeaterWatch), upstream remote |
+| 1 | Understand the codebase | ✅ Done |
+| 2 | Clean install documentation | ✅ Done — docs/INSTALL.md + install.sh automated installer |
+| 3 | Get it running on repeater hardware | ✅ 3 Pis deployed (home, MRP, Hatzic West) |
+| 4 | Explore sensors and GPIO | ✅ BQ24074 charger working on Hatzic. GPIO wiring doc complete |
 | 5 | Customize for CLUB1 / CLUB2 | ⬜ Not started |
-| 6 | Maintain clean upstream upgrade path | ⬜ Ongoing consideration |
+| 6 | Maintain clean upstream upgrade path | ✅ Ongoing — no core file customizations |
 
 ---
 
 ## Current Focus
 
-**Both Pis on latest code; firmware flash ready to complete; meshcore-site2 awaiting radio**
+**Hatzic West Pi deployed, RS232 bridge firmware build in progress**
 
-Upstream merged (9 commits), both Pis updated and running. Disk space on home Pi cleaned up
-(77% used). The firmware flash pipeline is fully ready — all tools installed, hardware sequence
-confirmed. Next step: retry a full firmware flash on the home Pi. meshcore-site2 still awaits
-radio hardware. jjkroell UX fork noted for future consideration.
+Three Pis fully deployed and operational. Hatzic West (Nebra conversion) needs custom
+MeshCore firmware with RS232 bridge to use UART instead of USB serial (VBUS required for
+USB enumeration, relay cuts VBUS by design). Sensor poller bug found — needs fix.
+
+---
+
+## Open Work Items
+
+### Bug: Sensor poller ignores individual enable/disable flags
+- **File:** `collector/sensor_poller.py`
+- **Problem:** When `MESHCORE_SENSOR_POLL=1`, ALL sensors are polled every tick regardless of individual `MESHCORE_SENSOR_*=0` flags. The individual flags are only used by the Settings UI toggles, never checked by the poller.
+- **Symptom:** LIS2DW12 throws I2C errors every 5 seconds even though `MESHCORE_SENSOR_LIS2DW12=0`
+- **Fix:** Add `config.SENSOR_*_ENABLED` flags to `config.py` (read from env), check them in `_run_loop()` before calling each `_poll_*` method. Also update startup log to distinguish "disabled" vs "library missing".
+- **Affected sensors:** All five (INA3221, BME280, LIS2DW12, AS3935, BQ24074)
+
+### Hatzic West: RS232 bridge firmware
+- **Status:** Briefing created at `~/Nextcloud/claude/meshcore-rs232/CLAUDE.md`
+- **Goal:** Build Ikoka Stick repeater firmware with RS232 bridge (UART on D6/D7)
+- **Why:** Relay cuts VBUS, nRF52840 needs VBUS for USB — UART bypasses this entirely
+- **Wiring:** Already done (D6→Pi Pin 10, D7→Pi Pin 8, GND→Pin 14)
+- **After flash:** Enable bridge, switch SerialMux REAL_PORT from ttyACM0 to ttyAMA0
+
+### Hatzic West: USB relay wiring
+- **Current:** NO (normally open) — VBUS cut by default, stick doesn't enumerate
+- **Workaround:** gpioset holds GPIO 17 high (dies on reboot)
+- **If RS232 firmware works:** Relay stays as-is (VBUS only needed for flashing)
+- **If RS232 firmware doesn't work:** Swap relay from NO to NC (one wire move)
+
+### Update gpio-wiring.md with confirmed findings
+- VBUS IS required for nRF52840 USB enumeration — update Note 2 to mark as CONFIRMED
+- D6/D7 are I2C (OLED) in stock firmware, not UART — document this
+- Add Nebra pin remapping as a variant section
+
+### Deploy updates to other Pis
+- Sensor poller fix (once built) needs to go to all three Pis
+- Home Pi and MRP still on old sensor poller code
 
 ---
 

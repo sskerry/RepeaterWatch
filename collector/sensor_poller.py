@@ -46,28 +46,45 @@ class SensorPoller:
 
     def start(self):
         self._stop_event.clear()
-        self._as3935.init()
-        self._sensor_status["as3935"]["ok"] = self._as3935.available
 
-        # Log sensor library availability at startup
-        self._sensor_status["ina3221"]["ok"] = ina3221_sensor.HAS_INA3221
-        self._sensor_status["bme280"]["ok"] = bme280_sensor.HAS_BME280
-        self._sensor_status["lis2dw12"]["ok"] = lis2dw12_sensor.HAS_LIS2DW12
-        self._sensor_status["bq24074"]["ok"] = bq24074_sensor.HAS_BQ24074
+        # Only init AS3935 if enabled
+        if config.SENSOR_AS3935_ENABLED:
+            self._as3935.init()
+            self._sensor_status["as3935"]["ok"] = self._as3935.available
+
+        # Determine status of each sensor: disabled, library missing, or available
+        sensor_checks = [
+            ("ina3221",  config.SENSOR_INA3221_ENABLED,  ina3221_sensor.HAS_INA3221),
+            ("bme280",   config.SENSOR_BME280_ENABLED,   bme280_sensor.HAS_BME280),
+            ("lis2dw12", config.SENSOR_LIS2DW12_ENABLED, lis2dw12_sensor.HAS_LIS2DW12),
+            ("bq24074",  config.SENSOR_BQ24074_ENABLED,  bq24074_sensor.HAS_BQ24074),
+        ]
 
         available = []
+        disabled = []
         missing = []
-        for name, mod in [("ina3221", ina3221_sensor), ("bme280", bme280_sensor),
-                          ("lis2dw12", lis2dw12_sensor), ("bq24074", bq24074_sensor)]:
-            flag = getattr(mod, "HAS_" + name.upper(), False)
-            (available if flag else missing).append(name)
-        if self._as3935.available:
+        for name, enabled, has_lib in sensor_checks:
+            if not enabled:
+                disabled.append(name)
+                self._sensor_status[name]["ok"] = False
+            elif has_lib:
+                available.append(name)
+                self._sensor_status[name]["ok"] = True
+            else:
+                missing.append(name)
+                self._sensor_status[name]["ok"] = False
+
+        # AS3935 separately (uses its own init check)
+        if not config.SENSOR_AS3935_ENABLED:
+            disabled.append("as3935")
+        elif self._as3935.available:
             available.append("as3935")
         else:
             missing.append("as3935")
 
-        logger.info("SensorPoller starting — available: [%s], missing: [%s]",
+        logger.info("SensorPoller starting — available: [%s], disabled: [%s], missing libs: [%s]",
                      ", ".join(available) or "none",
+                     ", ".join(disabled) or "none",
                      ", ".join(missing) or "none")
         logger.info("Intervals: power=%ds, env=%ds, accel=%ds",
                      POWER_INTERVAL, ENV_INTERVAL, ACCEL_INTERVAL)
@@ -99,23 +116,28 @@ class SensorPoller:
 
             # INA3221 + BQ24074 — every 10s
             if now - last_power >= POWER_INTERVAL:
-                self._poll_power(now)
-                self._poll_bq24074(now)
+                if config.SENSOR_INA3221_ENABLED:
+                    self._poll_power(now)
+                if config.SENSOR_BQ24074_ENABLED:
+                    self._poll_bq24074(now)
                 last_power = now
 
             # LIS2DW12 — every 5s
             if now - last_accel >= ACCEL_INTERVAL:
-                self._poll_accel(now)
+                if config.SENSOR_LIS2DW12_ENABLED:
+                    self._poll_accel(now)
                 last_accel = now
 
             # BME280 — every 60s
             if now - last_env >= ENV_INTERVAL:
-                self._poll_env(now)
+                if config.SENSOR_BME280_ENABLED:
+                    self._poll_env(now)
                 last_env = now
 
             # AS3935 — drain events every tick, adaptive noise floor
-            self._store_lightning_events()
-            self._as3935.maybe_lower_noise_floor()
+            if config.SENSOR_AS3935_ENABLED:
+                self._store_lightning_events()
+                self._as3935.maybe_lower_noise_floor()
 
             # Log summary every 5 minutes
             cycle += 1

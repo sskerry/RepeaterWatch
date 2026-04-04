@@ -43,6 +43,14 @@ RADIO_RESET_GPIO_PIN = int(os.environ.get("MESHCORE_RADIO_RESET_GPIO", "4"))
 USB_RELAY_GPIO_PIN = int(os.environ.get("MESHCORE_USB_RELAY_GPIO", "17"))
 
 SENSOR_POLL_ENABLED = os.environ.get("MESHCORE_SENSOR_POLL", "1") != "0"
+
+# Individual sensor enable/disable (Settings UI writes these to .env)
+SENSOR_INA3221_ENABLED = os.environ.get("MESHCORE_SENSOR_INA3221", "1") != "0"
+SENSOR_BME280_ENABLED = os.environ.get("MESHCORE_SENSOR_BME280", "1") != "0"
+SENSOR_LIS2DW12_ENABLED = os.environ.get("MESHCORE_SENSOR_LIS2DW12", "1") != "0"
+SENSOR_AS3935_ENABLED = os.environ.get("MESHCORE_SENSOR_AS3935", "1") != "0"
+SENSOR_BQ24074_ENABLED = os.environ.get("MESHCORE_SENSOR_BQ24074", "1") != "0"
+
 AS3935_IRQ_GPIO = int(os.environ.get("MESHCORE_AS3935_IRQ_GPIO", "18"))
 AS3935_AFE_MODE = os.environ.get("MESHCORE_AS3935_AFE_MODE", "outdoor")  # "indoor" or "outdoor"
 AS3935_NOISE_FLOOR = int(os.environ.get("MESHCORE_AS3935_NOISE_FLOOR", "3"))  # 0-7
