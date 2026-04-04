@@ -890,7 +890,17 @@
                     <span class="tool-icon">&#x1F6E1;</span>
                     <h3>Login Protection</h3>
                 </div>
-                <p class="tool-desc">Lock out IPs after repeated failed login attempts.</p>
+                <div class="settings-group">
+                    <div class="settings-row">
+                        <label for="auth-local-mode">Local mode</label>
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="auth-local-mode" />
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </div>
+                    <p class="tool-desc" style="margin-top:2px; font-size:0.8em;">All features accessible without a password. <strong>Trusted LANs only</strong> — never enable on internet-facing installs.</p>
+                </div>
+                <p class="tool-desc" style="margin-top:8px;">Lock out IPs after repeated failed login attempts.</p>
                 <div class="settings-group">
                     <div class="settings-row">
                         <label for="auth-max-attempts">Max failed attempts</label>

@@ -1369,9 +1369,11 @@
                 authClearBtn.style.display = 'none';
             }
             // Populate login protection fields
+            var localModeEl = document.getElementById('auth-local-mode');
             var maxEl = document.getElementById('auth-max-attempts');
             var lockEl = document.getElementById('auth-lockout-secs');
             var proxyEl = document.getElementById('auth-trusted-proxies');
+            if (localModeEl) localModeEl.checked = !!d.local_mode;
             if (maxEl) maxEl.value = d.max_attempts || 5;
             if (lockEl) lockEl.value = d.lockout_secs || 300;
             if (proxyEl) proxyEl.value = d.trusted_proxies || '';
@@ -1466,7 +1468,9 @@
 
         if (authSettingsSaveBtn) {
             authSettingsSaveBtn.addEventListener('click', function () {
+                var localModeCheckbox = document.getElementById('auth-local-mode');
                 var body = {
+                    local_mode: localModeCheckbox ? localModeCheckbox.checked : false,
                     max_attempts: parseInt(document.getElementById('auth-max-attempts').value, 10),
                     lockout_secs: parseInt(document.getElementById('auth-lockout-secs').value, 10),
                     trusted_proxies: document.getElementById('auth-trusted-proxies').value.trim(),

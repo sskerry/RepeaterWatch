@@ -1645,6 +1645,40 @@ footer strong { color: var(--text); }
 .sensor-toggle-info { display: flex; align-items: center; gap: 12px; min-width: 0; }
 .sensor-toggle-icon { font-size: 1.3rem; flex-shrink: 0; }
 .sensor-toggle-name { font-family: var(--font-mono); font-size: 0.85rem; font-weight: 600; color: var(--text); }
+/* Generic toggle switch */
+.toggle-switch {
+    position: relative;
+    display: inline-block;
+    width: 42px; height: 24px;
+    flex-shrink: 0;
+    cursor: pointer;
+}
+.toggle-switch input { opacity: 0; width: 0; height: 0; position: absolute; }
+.toggle-slider {
+    position: absolute;
+    inset: 0;
+    background: var(--border);
+    border-radius: 999px;
+    transition: background 0.2s;
+}
+.toggle-slider::after {
+    content: '';
+    position: absolute;
+    width: 18px; height: 18px;
+    border-radius: 50%;
+    background: var(--text-muted);
+    top: 3px; left: 3px;
+    transition: transform 0.2s, background 0.2s;
+}
+.toggle-switch input:checked + .toggle-slider {
+    background: rgba(0,229,160,0.2);
+    border: 1px solid var(--green);
+}
+.toggle-switch input:checked + .toggle-slider::after {
+    transform: translateX(18px);
+    background: var(--green);
+}
+
 .sensor-toggle-desc { font-size: 0.76rem; color: var(--text-muted); margin-top: 2px; line-height: 1.4; }
 
 .sensor-toggle-switch {

@@ -721,9 +721,11 @@ def auth_status():
     result = {
         "auth_enabled": has_hash or has_plain,
         "is_authenticated": authenticated,
+        "local_mode": config.LOCAL_MODE,
     }
     # Only expose security configuration to authenticated users
-    if authenticated:
+    # (or when in local mode without auth, since the user has full access)
+    if authenticated or (config.LOCAL_MODE and not (has_hash or has_plain)):
         result["method"] = "bcrypt" if has_hash else "plaintext" if has_plain else "none"
         result["max_attempts"] = config.LOGIN_MAX_ATTEMPTS
         result["lockout_secs"] = config.LOGIN_LOCKOUT_SECS
@@ -781,6 +783,11 @@ def auth_update_settings():
         if val < 30 or val > 86400:
             return jsonify({"error": "lockout_secs must be 30-86400"}), 400
         _upsert_env("MESHCORE_LOGIN_LOCKOUT_SECS", str(val))
+        changed = True
+
+    if "local_mode" in data:
+        val = "1" if data["local_mode"] else "0"
+        _upsert_env("MESHCORE_LOCAL_MODE", val)
         changed = True
 
     if "trusted_proxies" in data:
