@@ -1333,6 +1333,174 @@
                 setTimeout(function () { nbStatusEl.textContent = ''; }, 3000);
             });
         });
+
+        // ── Authentication management ────────────────────────
+        var authStatusEl = document.getElementById('auth-current-status');
+        var authSetBtn = document.getElementById('auth-set-btn');
+        var authClearBtn = document.getElementById('auth-clear-btn');
+        var authNewPw = document.getElementById('auth-new-pw');
+        var authConfirmPw = document.getElementById('auth-confirm-pw');
+        var authMsg = document.getElementById('auth-status-msg');
+
+        if (!authSetBtn) return;
+
+        // Fetch current auth status and populate login protection fields
+        fetchJSON('/api/v1/auth/status').then(function (d) {
+            if (d.auth_enabled) {
+                authStatusEl.textContent = 'Enabled (' + d.method + ')';
+                authStatusEl.style.color = 'var(--green)';
+            } else {
+                authStatusEl.textContent = 'Disabled — dashboard is public';
+                authStatusEl.style.color = 'var(--yellow)';
+                authClearBtn.style.display = 'none';
+            }
+            // Populate login protection fields
+            var maxEl = document.getElementById('auth-max-attempts');
+            var lockEl = document.getElementById('auth-lockout-secs');
+            var proxyEl = document.getElementById('auth-trusted-proxies');
+            if (maxEl) maxEl.value = d.max_attempts || 5;
+            if (lockEl) lockEl.value = d.lockout_secs || 300;
+            if (proxyEl) proxyEl.value = d.trusted_proxies || '';
+        }).catch(function () {
+            authStatusEl.textContent = 'Unknown';
+        });
+
+        authSetBtn.addEventListener('click', function () {
+            var pw = authNewPw.value;
+            var confirm = authConfirmPw.value;
+            if (pw.length < 8) {
+                authMsg.textContent = 'Password must be at least 8 characters';
+                authMsg.className = 'settings-save-status error';
+                setTimeout(function () { authMsg.textContent = ''; }, 3000);
+                return;
+            }
+            if (pw !== confirm) {
+                authMsg.textContent = 'Passwords do not match';
+                authMsg.className = 'settings-save-status error';
+                setTimeout(function () { authMsg.textContent = ''; }, 3000);
+                return;
+            }
+            authSetBtn.disabled = true;
+            authMsg.textContent = 'Setting password...';
+            authMsg.className = 'settings-save-status';
+
+            fetch('/api/v1/auth/password', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ password: pw }),
+            })
+            .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, data: d }; }); })
+            .then(function (resp) {
+                authSetBtn.disabled = false;
+                authNewPw.value = '';
+                authConfirmPw.value = '';
+                if (resp.ok) {
+                    authMsg.textContent = 'Password set — service restarting...';
+                    authMsg.className = 'settings-save-status success';
+                    authStatusEl.textContent = 'Enabled (bcrypt)';
+                    authStatusEl.style.color = 'var(--green)';
+                    authClearBtn.style.display = '';
+                    setTimeout(function () { authMsg.textContent = 'Service restarted'; }, 4000);
+                } else {
+                    authMsg.textContent = resp.data.error || 'Failed';
+                    authMsg.className = 'settings-save-status error';
+                }
+                setTimeout(function () { authMsg.textContent = ''; }, 5000);
+            })
+            .catch(function () {
+                authSetBtn.disabled = false;
+                authMsg.textContent = 'Network error';
+                authMsg.className = 'settings-save-status error';
+                setTimeout(function () { authMsg.textContent = ''; }, 3000);
+            });
+        });
+
+        authClearBtn.addEventListener('click', function () {
+            if (!confirm('Disable authentication? The dashboard will be fully public.')) return;
+            authClearBtn.disabled = true;
+            authMsg.textContent = 'Disabling auth...';
+            authMsg.className = 'settings-save-status';
+
+            fetch('/api/v1/auth/clear', { method: 'POST' })
+            .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, data: d }; }); })
+            .then(function (resp) {
+                authClearBtn.disabled = false;
+                if (resp.ok) {
+                    authMsg.textContent = 'Auth disabled — service restarting...';
+                    authMsg.className = 'settings-save-status success';
+                    authStatusEl.textContent = 'Disabled — dashboard is public';
+                    authStatusEl.style.color = 'var(--yellow)';
+                    authClearBtn.style.display = 'none';
+                    setTimeout(function () { authMsg.textContent = 'Service restarted'; }, 4000);
+                } else {
+                    authMsg.textContent = resp.data.error || 'Failed';
+                    authMsg.className = 'settings-save-status error';
+                }
+                setTimeout(function () { authMsg.textContent = ''; }, 5000);
+            })
+            .catch(function () {
+                authClearBtn.disabled = false;
+                authMsg.textContent = 'Network error';
+                authMsg.className = 'settings-save-status error';
+                setTimeout(function () { authMsg.textContent = ''; }, 3000);
+            });
+        });
+
+        // ── Login protection settings ────────────────────────
+        var authSettingsSaveBtn = document.getElementById('auth-settings-save-btn');
+        var authSettingsStatus = document.getElementById('auth-settings-status');
+
+        if (authSettingsSaveBtn) {
+            authSettingsSaveBtn.addEventListener('click', function () {
+                var body = {
+                    max_attempts: parseInt(document.getElementById('auth-max-attempts').value, 10),
+                    lockout_secs: parseInt(document.getElementById('auth-lockout-secs').value, 10),
+                    trusted_proxies: document.getElementById('auth-trusted-proxies').value.trim(),
+                };
+                if (!body.max_attempts || body.max_attempts < 1) {
+                    authSettingsStatus.textContent = 'Max attempts must be at least 1';
+                    authSettingsStatus.className = 'settings-save-status error';
+                    setTimeout(function () { authSettingsStatus.textContent = ''; }, 3000);
+                    return;
+                }
+                if (!body.lockout_secs || body.lockout_secs < 30) {
+                    authSettingsStatus.textContent = 'Lockout must be at least 30 seconds';
+                    authSettingsStatus.className = 'settings-save-status error';
+                    setTimeout(function () { authSettingsStatus.textContent = ''; }, 3000);
+                    return;
+                }
+                authSettingsSaveBtn.disabled = true;
+                authSettingsStatus.textContent = 'Saving...';
+                authSettingsStatus.className = 'settings-save-status';
+
+                fetch('/api/v1/auth/settings', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body),
+                })
+                .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, data: d }; }); })
+                .then(function (resp) {
+                    authSettingsSaveBtn.disabled = false;
+                    if (resp.ok) {
+                        authSettingsStatus.textContent = resp.data.restarting ? 'Saved — service restarting...' : 'Saved';
+                        authSettingsStatus.className = 'settings-save-status success';
+                        if (resp.data.restarting) {
+                            setTimeout(function () { authSettingsStatus.textContent = 'Service restarted'; }, 4000);
+                        }
+                    } else {
+                        authSettingsStatus.textContent = resp.data.error || 'Save failed';
+                        authSettingsStatus.className = 'settings-save-status error';
+                    }
+                    setTimeout(function () { authSettingsStatus.textContent = ''; }, 5000);
+                })
+                .catch(function () {
+                    authSettingsSaveBtn.disabled = false;
+                    authSettingsStatus.textContent = 'Network error';
+                    authSettingsStatus.className = 'settings-save-status error';
+                    setTimeout(function () { authSettingsStatus.textContent = ''; }, 3000);
+                });
+            });
+        }
     }
 
     function populateSettingsForm(settings) {

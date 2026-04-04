@@ -29,6 +29,13 @@ MAX_QUERY_HOURS = 720  # 30 days
 SECRET_KEY = os.environ.get("MESHCORE_SECRET_KEY", None)
 PASSWORD = os.environ.get("MESHCORE_PASSWORD", None)
 
+# Fail2ban: lock out IPs after too many failed login attempts
+LOGIN_MAX_ATTEMPTS = int(os.environ.get("MESHCORE_LOGIN_MAX_ATTEMPTS", "5"))
+LOGIN_LOCKOUT_SECS = int(os.environ.get("MESHCORE_LOGIN_LOCKOUT_SECS", "300"))
+
+# Trusted reverse proxies (comma-separated IPs, e.g. "127.0.0.1,10.0.0.1")
+TRUSTED_PROXIES = os.environ.get("MESHCORE_TRUSTED_PROXIES", "")
+
 TERMINAL_SERIAL_PORT = os.environ.get("MESHCORE_TERMINAL_SERIAL_PORT", "/dev/ttyV2")
 TERMINAL_SERIAL_BAUD = int(os.environ.get("MESHCORE_TERMINAL_SERIAL_BAUD", "115200"))
 

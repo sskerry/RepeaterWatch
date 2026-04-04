@@ -1,10 +1,12 @@
+import bcrypt
+import logging
 import os
 import platform
 import subprocess
 import threading
 import time
 
-from flask import Blueprint, jsonify, request, current_app
+from flask import Blueprint, jsonify, request, current_app, session
 from werkzeug.utils import secure_filename
 
 import config
@@ -18,6 +20,8 @@ try:
     HAS_PSUTIL = True
 except ImportError:
     HAS_PSUTIL = False
+
+logger = logging.getLogger(__name__)
 
 MANAGED_SERVICES = ["mctomqtt", "SerialMux", "RepeaterWatch"]
 
@@ -46,18 +50,25 @@ def device_info():
         lon = float(info["lon"]) if "lon" in info else None
     except (ValueError, TypeError):
         pass
-    return jsonify({
+    result = {
         "name": info.get("name", "Unknown"),
         "firmware": info.get("firmware", "Unknown"),
         "board": info.get("board", "Unknown"),
         "radio_config": info.get("radio_config", "Unknown"),
-        "public_key": pk,
         "pubkey_prefix": pubkey_prefix,
-        "lat": lat,
-        "lon": lon,
         "uptime_secs": uptime,
         "hardware": os.environ.get("MESHCORE_HARDWARE", ""),
-    })
+    }
+    # Only expose sensitive details to authenticated users
+    if session.get("authenticated", False):
+        result["public_key"] = pk
+        result["lat"] = lat
+        result["lon"] = lon
+    else:
+        result["public_key"] = ""
+        result["lat"] = None
+        result["lon"] = None
+    return jsonify(result)
 
 
 @api.route("/stats/battery")
@@ -316,7 +327,7 @@ def stats_pi_snapshot():
     top_procs.sort(key=lambda x: x["memory_percent"], reverse=True)
     top_procs = top_procs[:10]
 
-    return jsonify({
+    result = {
         "cpu_percent": cpu_pct,
         "per_cpu": per_cpu,
         "load_1": round(load_1, 2),
@@ -333,15 +344,24 @@ def stats_pi_snapshot():
         "disk_percent": disk.percent,
         "uptime_secs": uptime,
         "process_count": proc_count,
-        "top_processes": top_procs,
-        "platform": {
+    }
+    # Only expose detailed system info to authenticated users
+    if session.get("authenticated", False):
+        result["top_processes"] = top_procs
+        result["platform"] = {
             "system": platform.system(),
             "release": platform.release(),
             "machine": platform.machine(),
             "hostname": platform.node(),
             "python": platform.python_version(),
-        },
-    })
+        }
+    else:
+        result["top_processes"] = []
+        result["platform"] = {
+            "system": platform.system(),
+            "machine": platform.machine(),
+        }
+    return jsonify(result)
 
 
 # ── Settings ──────────────────────────────────────────────
@@ -647,6 +667,146 @@ def sensors_config_post():
     return jsonify({"ok": True, "polling_enabled": any_enabled, "restart_required": True})
 
 
+# ── Authentication Management ─────────────────────────────
+
+def _env_path():
+    return os.path.join(os.path.dirname(os.path.dirname(__file__)), ".env")
+
+
+def _read_env_values():
+    env_vals = {}
+    path = _env_path()
+    if os.path.exists(path):
+        for line in open(path):
+            s = line.strip()
+            if "=" in s and not s.startswith("#"):
+                k, _, v = s.partition("=")
+                env_vals[k.strip()] = v.strip()
+    return env_vals
+
+
+def _upsert_env(key, value):
+    """Update or insert a key in the .env file."""
+    path = _env_path()
+    if not os.path.exists(path):
+        return False
+    lines = open(path).readlines()
+    found = False
+    out = []
+    for l in lines:
+        if l.startswith(key + "="):
+            out.append(f"{key}={value}\n")
+            found = True
+        else:
+            out.append(l)
+    if not found:
+        out.append(f"{key}={value}\n")
+    open(path, "w").writelines(out)
+    return True
+
+
+def _delayed_restart(delay=2.0):
+    """Restart the RepeaterWatch service after a short delay."""
+    def do_restart():
+        subprocess.run(["systemctl", "restart", "RepeaterWatch"], timeout=30)
+    threading.Timer(delay, do_restart).start()
+
+
+@api.route("/auth/status")
+def auth_status():
+    env = _read_env_values()
+    has_hash = bool(env.get("MESHCORE_PASSWORD_HASH", ""))
+    has_plain = bool(env.get("MESHCORE_PASSWORD", ""))
+    authenticated = session.get("authenticated", False)
+    result = {
+        "auth_enabled": has_hash or has_plain,
+        "is_authenticated": authenticated,
+    }
+    # Only expose security configuration to authenticated users
+    if authenticated:
+        result["method"] = "bcrypt" if has_hash else "plaintext" if has_plain else "none"
+        result["max_attempts"] = config.LOGIN_MAX_ATTEMPTS
+        result["lockout_secs"] = config.LOGIN_LOCKOUT_SECS
+        result["trusted_proxies"] = config.TRUSTED_PROXIES
+    return jsonify(result)
+
+
+@api.route("/auth/password", methods=["POST"])
+def auth_set_password():
+    data = request.get_json(force=True)
+    password = data.get("password", "")
+    if len(password) < 8:
+        return jsonify({"error": "Password must be at least 8 characters"}), 400
+
+    hashed = bcrypt.hashpw(password.encode(), bcrypt.gensalt(12)).decode()
+    _upsert_env("MESHCORE_PASSWORD_HASH", hashed)
+    _upsert_env("MESHCORE_PASSWORD", "")
+
+    # Auto-login the user who just set the password
+    session["authenticated"] = True
+
+    # Restart service so new password takes effect
+    _delayed_restart()
+
+    return jsonify({"status": "ok", "restarting": True})
+
+
+@api.route("/auth/clear", methods=["POST"])
+def auth_clear_password():
+    _upsert_env("MESHCORE_PASSWORD_HASH", "")
+    _upsert_env("MESHCORE_PASSWORD", "")
+    session.pop("authenticated", None)
+
+    # Restart service so auth is disabled
+    _delayed_restart()
+
+    return jsonify({"status": "ok", "restarting": True})
+
+
+@api.route("/auth/settings", methods=["POST"])
+def auth_update_settings():
+    """Update fail2ban and proxy settings in .env"""
+    data = request.get_json(force=True)
+    changed = False
+
+    if "max_attempts" in data:
+        val = int(data["max_attempts"])
+        if val < 1 or val > 100:
+            return jsonify({"error": "max_attempts must be 1-100"}), 400
+        _upsert_env("MESHCORE_LOGIN_MAX_ATTEMPTS", str(val))
+        changed = True
+
+    if "lockout_secs" in data:
+        val = int(data["lockout_secs"])
+        if val < 30 or val > 86400:
+            return jsonify({"error": "lockout_secs must be 30-86400"}), 400
+        _upsert_env("MESHCORE_LOGIN_LOCKOUT_SECS", str(val))
+        changed = True
+
+    if "trusted_proxies" in data:
+        val = data["trusted_proxies"].strip()
+        # Validate each IP is a private/localhost address
+        if val:
+            import ipaddress
+            for ip_str in val.split(","):
+                ip_str = ip_str.strip()
+                if not ip_str:
+                    continue
+                try:
+                    ip = ipaddress.ip_address(ip_str)
+                except ValueError:
+                    return jsonify({"error": f"Invalid IP address: {ip_str}"}), 400
+                if not (ip.is_private or ip.is_loopback):
+                    return jsonify({"error": f"Trusted proxy must be a private/localhost IP: {ip_str}"}), 400
+        _upsert_env("MESHCORE_TRUSTED_PROXIES", val)
+        changed = True
+
+    if changed:
+        _delayed_restart()
+
+    return jsonify({"status": "ok", "restarting": changed})
+
+
 # ── Radio / GPIO ──────────────────────────────────────────
 
 @api.route("/radio/reset", methods=["POST"])
@@ -735,7 +895,8 @@ def radio_usb_status():
         enabled = "hi" in output
         return jsonify({"enabled": enabled})
     except Exception as e:
-        return jsonify({"enabled": False, "error": str(e)})
+        logger.warning("USB relay status check failed: %s", e)
+        return jsonify({"enabled": False, "error": "Failed to read relay status"})
 
 
 @api.route("/radio/usb", methods=["POST"])
@@ -753,7 +914,8 @@ def radio_usb_toggle():
             capture_output=True, text=True, timeout=5, check=True,
         )
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        logger.warning("USB relay toggle failed: %s", e)
+        return jsonify({"error": "Failed to toggle USB relay"}), 500
 
     # Wait for USB enumeration and detect new device
     device = None

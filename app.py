@@ -3,6 +3,8 @@ import logging
 import os
 import signal
 import sys
+import threading
+import time
 
 from flask import Flask, jsonify, redirect, render_template, request, session, url_for
 from flask_sock import Sock
@@ -24,9 +26,75 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
+# ── Fail2ban: track failed login attempts by IP ──────────
+_login_attempts = {}   # ip -> [timestamp, timestamp, ...]
+_login_lock = threading.Lock()
+
+
+def _client_ip():
+    """Get the real client IP, respecting trusted proxies."""
+    # If behind a trusted proxy, use X-Forwarded-For
+    if config.TRUSTED_PROXIES:
+        trusted = {p.strip() for p in config.TRUSTED_PROXIES.split(",") if p.strip()}
+        if request.remote_addr in trusted:
+            forwarded = request.headers.get("X-Forwarded-For", "")
+            if forwarded:
+                # First IP in X-Forwarded-For is the real client
+                return forwarded.split(",")[0].strip()
+    return request.remote_addr
+
+
+def _is_locked_out(ip):
+    """Check if an IP is currently locked out."""
+    with _login_lock:
+        attempts = _login_attempts.get(ip, [])
+        if len(attempts) < config.LOGIN_MAX_ATTEMPTS:
+            return False
+        # Check if the most recent attempt is within the lockout window
+        cutoff = time.time() - config.LOGIN_LOCKOUT_SECS
+        recent = [t for t in attempts if t > cutoff]
+        _login_attempts[ip] = recent
+        return len(recent) >= config.LOGIN_MAX_ATTEMPTS
+
+
+def _record_failed_attempt(ip):
+    """Record a failed login attempt for an IP."""
+    with _login_lock:
+        if ip not in _login_attempts:
+            _login_attempts[ip] = []
+        _login_attempts[ip].append(time.time())
+        # Keep only recent attempts to avoid memory leak
+        cutoff = time.time() - config.LOGIN_LOCKOUT_SECS
+        _login_attempts[ip] = [t for t in _login_attempts[ip] if t > cutoff]
+    count = len(_login_attempts.get(ip, []))
+    logger.warning("Failed login attempt %d/%d from %s", count, config.LOGIN_MAX_ATTEMPTS, ip)
+
+
+def _clear_attempts(ip):
+    """Clear failed attempts after successful login."""
+    with _login_lock:
+        _login_attempts.pop(ip, None)
+
+
 def create_app() -> Flask:
     app = Flask(__name__)
     app.secret_key = config.SECRET_KEY or os.urandom(24)
+
+    # Harden session cookies
+    app.config["SESSION_COOKIE_HTTPONLY"] = True
+    app.config["SESSION_COOKIE_SAMESITE"] = "Strict"
+    if config.TRUSTED_PROXIES:
+        # If behind a proxy, assume HTTPS termination
+        app.config["SESSION_COOKIE_SECURE"] = True
+
+    # Limit upload size to 16MB (firmware .zip files are typically ~500KB)
+    app.config["MAX_CONTENT_LENGTH"] = 16 * 1024 * 1024
+
+    # Apply ProxyFix if trusted proxies are configured
+    if config.TRUSTED_PROXIES:
+        from werkzeug.middleware.proxy_fix import ProxyFix
+        app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
+        logger.info("ProxyFix enabled for trusted proxies: %s", config.TRUSTED_PROXIES)
 
     # Initialize database
     init_db(config.DB_PATH)
@@ -47,24 +115,48 @@ def create_app() -> Flask:
     def _is_authenticated():
         return session.get("authenticated", False)
 
+    # Dangerous paths that ALWAYS require auth, even if no password is configured.
+    # If no password is set, these endpoints are simply inaccessible until one is set.
+    _ALWAYS_AUTH_PATHS = (
+        "/ws/",                       # Full shell / serial terminal
+        "/api/v1/system/reboot",      # Reboot the Pi
+        "/api/v1/firmware/flash",     # Flash firmware
+        "/api/v1/radio/reset",        # Reset radio via GPIO
+        "/api/v1/radio/bootloader",   # Enter bootloader via GPIO
+        "/api/v1/radio/usb",          # Toggle USB relay
+        "/api/v1/database/reset",     # Wipe all data
+        "/api/v1/neighbors/delete",   # Delete all neighbors
+        "/api/v1/neighbors/purge",    # Purge old neighbors
+        "/api/v1/auth/clear",         # Disable authentication
+        "/api/v1/auth/settings",      # Change security settings
+    )
+
     @app.before_request
     def require_auth():
         # Always allow static files and login/logout
         if request.endpoint in ("login", "logout", "static", "auth_nonce"):
             return None
 
-        # If auth is not configured, everything is public
+        # Dangerous endpoints ALWAYS require authentication, even if
+        # no password is configured. This prevents accidental exposure
+        # of shell access, reboot, firmware flash, etc. on public networks.
+        path = request.path
+        if any(path.startswith(p) or path == p for p in _ALWAYS_AUTH_PATHS):
+            if not _is_authenticated():
+                if not _auth_enabled():
+                    return jsonify({
+                        "error": "This action requires authentication. "
+                                 "Set a password in Settings first."
+                    }), 403
+                return jsonify({"error": "Authentication required"}), 401
+            return None
+
+        # If auth is not configured, everything else is public
         if not _auth_enabled():
             return None
 
         # GET requests to the dashboard and read-only API are always public
         if request.method == "GET":
-            return None
-
-        # WebSocket connections require authentication
-        if request.path.startswith("/ws/"):
-            if not _is_authenticated():
-                return jsonify({"error": "Authentication required"}), 401
             return None
 
         # POST/PUT/DELETE/PATCH on API require authentication
@@ -79,6 +171,20 @@ def create_app() -> Flask:
     def login():
         error = None
         if request.method == "POST":
+            ip = _client_ip()
+
+            # Check fail2ban lockout
+            if _is_locked_out(ip):
+                remaining = config.LOGIN_LOCKOUT_SECS
+                with _login_lock:
+                    attempts = _login_attempts.get(ip, [])
+                    if attempts:
+                        elapsed = time.time() - attempts[-1]
+                        remaining = max(1, int(config.LOGIN_LOCKOUT_SECS - elapsed))
+                error = f"Too many failed attempts. Try again in {remaining}s."
+                logger.warning("Locked out login attempt from %s", ip)
+                return render_template("login.html", error=error)
+
             submitted = request.form.get("password", "")
             pw_hash   = os.environ.get("MESHCORE_PASSWORD_HASH", "")
             pw_plain  = os.environ.get("MESHCORE_PASSWORD", "")
@@ -89,9 +195,15 @@ def create_app() -> Flask:
             else:
                 ok = False
             if ok:
+                _clear_attempts(ip)
                 session["authenticated"] = True
                 return redirect(url_for("index"))
-            error = "Invalid password"
+            _record_failed_attempt(ip)
+            remaining_attempts = config.LOGIN_MAX_ATTEMPTS - len(_login_attempts.get(ip, []))
+            if remaining_attempts > 0:
+                error = f"Invalid password ({remaining_attempts} attempts remaining)"
+            else:
+                error = f"Too many failed attempts. Locked out for {config.LOGIN_LOCKOUT_SECS}s."
         return render_template("login.html", error=error)
 
     @app.route("/logout")
