@@ -292,10 +292,6 @@ if [[ ! -f "$RW_DIR/.env" ]]; then
 # MESHCORE_PASSWORD_HASH=
 MESHCORE_SECRET_KEY=$SECRET_KEY
 
-# Local mode: set to 1 to allow all features without a password.
-# WARNING: Only use on trusted local networks. NEVER enable on internet-facing installs.
-MESHCORE_LOCAL_MODE=0
-
 # Serial (via SerialMux virtual port)
 MESHCORE_SERIAL_PORT=/dev/ttyV0
 MESHCORE_SERIAL_BAUD=115200
@@ -346,20 +342,14 @@ else
 fi
 
 echo ""
-echo -e "  ${BOLD}Dashboard access mode:${NC}\n"
-echo -e "    ${BOLD}1${NC}) Set a login password (recommended for remote/public access)"
-echo -e "    ${BOLD}2${NC}) Local mode — no password, all features open (trusted LAN only)"
-echo ""
-echo -en "${CYAN}?${NC}  Select [1]: "; read -r AUTH_CHOICE </dev/tty
-AUTH_CHOICE="${AUTH_CHOICE:-1}"
-
-if [[ "$AUTH_CHOICE" == "2" ]]; then
-    sed -i 's/^MESHCORE_LOCAL_MODE=.*/MESHCORE_LOCAL_MODE=1/' "$RW_DIR/.env"
-    warn "Local mode enabled — dashboard is fully open without a password."
-    warn "Do NOT expose this to the internet without setting a password first."
-else
-    echo ""
+echo -e "  ${BOLD}Optional: Set a login password${NC}\n"
+echo -e "  Without a password, the dashboard is fully open (all features accessible)."
+echo -e "  Set a password if this install will be accessible from the internet.\n"
+echo -en "${CYAN}?${NC}  Set a password now? [y/N]: "; read -r SET_PW </dev/tty
+if [[ "$SET_PW" =~ ^[Yy] ]]; then
     "$RW_DIR/venv/bin/python3" "$RW_DIR/setup_auth.py" || true
+else
+    info "No password set — dashboard is fully open. Set one later via Settings or setup_auth.py."
 fi
 echo ""
 

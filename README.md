@@ -17,7 +17,7 @@ A web-based monitoring dashboard for [MeshCore](https://meshcore.net/) repeaters
 - GPIO radio reset, bootloader mode, and USB relay control
 - Dark/light theme, mobile-responsive layout
 - Authentication with bcrypt, CSRF protection, fail2ban-style lockout
-- Local mode for password-free operation on trusted LANs
+- No-password mode: skip auth setup for trusted LANs, set a password anytime
 
 ## Requirements
 
@@ -42,9 +42,8 @@ cd /opt/RepeaterWatch && sudo bash uninstall.sh
 
 | Mode | Config | Behavior |
 |------|--------|----------|
-| **Locked down** (default) | No password, no local mode | Dashboard is read-only. Dangerous endpoints blocked. |
-| **Local mode** | `MESHCORE_LOCAL_MODE=1` | All features open, no password needed. **Trusted LANs only.** |
-| **Password protected** | Set via Settings page or `setup_auth.py` | Public read-only dashboard, write ops require login. |
+| **Open** (default) | No password set | All features accessible without login. **Trusted LANs only.** |
+| **Password protected** | Set via Settings page or `setup_auth.py` | Dashboard is read-only for visitors. Write operations require login. |
 
 ## GPIO Pin Reference
 
@@ -83,13 +82,13 @@ USB Radio ──> SerialMux ──┬──> /dev/ttyV0 ──> RepeaterWatch (w
 
 ## Security
 
-If exposing to the internet: use HTTPS (reverse proxy), set a strong password, configure `MESHCORE_TRUSTED_PROXIES`, and never enable local mode. See the Settings tab in the dashboard for security notes.
+If exposing to the internet: use HTTPS (reverse proxy), set a strong password, and configure `MESHCORE_TRUSTED_PROXIES`. See the Settings tab in the dashboard for security notes.
 
 ## Contributors
 
 - [MrAlders0n](https://github.com/MrAlders0n) — Original author
 - [jjkroell](https://github.com/jjkroell) (VE7KOD) — UX overhaul, dark/light theme, mobile layout, sensor management, install/uninstall scripts
-- [sskerry](https://github.com/sskerry) (MYCALL) — Security hardening, CSRF, fail2ban, local mode, upgrade script, bug fixes
+- [sskerry](https://github.com/sskerry) (MYCALL) — Security hardening, CSRF, fail2ban, upgrade script, bug fixes
 
 ## License
 

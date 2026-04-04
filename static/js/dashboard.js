@@ -1358,15 +1358,6 @@
 
         if (!authSetBtn) return;
 
-        var authCard = document.getElementById('auth-card');
-        var loginProtectionCard = document.getElementById('login-protection-card');
-
-        function updateAuthCardsVisibility(localMode, authEnabled) {
-            var hide = localMode && !authEnabled;
-            if (authCard) authCard.style.display = hide ? 'none' : '';
-            if (loginProtectionCard) loginProtectionCard.style.display = hide ? 'none' : '';
-        }
-
         // Fetch current auth status and populate fields
         fetchJSON('/api/v1/auth/status').then(function (d) {
             if (d.auth_enabled) {
@@ -1377,65 +1368,15 @@
                 authStatusEl.style.color = 'var(--yellow)';
                 authClearBtn.style.display = 'none';
             }
-            var localModeEl = document.getElementById('auth-local-mode');
             var maxEl = document.getElementById('auth-max-attempts');
             var lockEl = document.getElementById('auth-lockout-secs');
             var proxyEl = document.getElementById('auth-trusted-proxies');
-            if (localModeEl) localModeEl.checked = !!d.local_mode;
             if (maxEl) maxEl.value = d.max_attempts || 5;
             if (lockEl) lockEl.value = d.lockout_secs || 300;
             if (proxyEl) proxyEl.value = d.trusted_proxies || '';
-            updateAuthCardsVisibility(!!d.local_mode, d.auth_enabled);
         }).catch(function () {
             authStatusEl.textContent = 'Unknown';
         });
-
-        // Local mode toggle — show/hide auth cards dynamically
-        var localModeToggle = document.getElementById('auth-local-mode');
-        if (localModeToggle) {
-            localModeToggle.addEventListener('change', function () {
-                updateAuthCardsVisibility(this.checked, !!authStatusEl.style.color.match(/green/));
-            });
-        }
-
-        // Local mode save button
-        var localModeSaveBtn = document.getElementById('auth-local-mode-save-btn');
-        var localModeStatus = document.getElementById('auth-local-mode-status');
-        if (localModeSaveBtn) {
-            localModeSaveBtn.addEventListener('click', function () {
-                var enabled = document.getElementById('auth-local-mode').checked;
-                localModeSaveBtn.disabled = true;
-                localModeStatus.textContent = 'Saving...';
-                localModeStatus.className = 'settings-save-status';
-
-                fetch('/api/v1/auth/settings', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF_TOKEN },
-                    body: JSON.stringify({ local_mode: enabled }),
-                })
-                .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, data: d }; }); })
-                .then(function (resp) {
-                    localModeSaveBtn.disabled = false;
-                    if (resp.ok) {
-                        localModeStatus.textContent = resp.data.restarting ? 'Saved — service restarting...' : 'Saved';
-                        localModeStatus.className = 'settings-save-status success';
-                        if (resp.data.restarting) {
-                            setTimeout(function () { localModeStatus.textContent = 'Service restarted'; }, 4000);
-                        }
-                    } else {
-                        localModeStatus.textContent = resp.data.error || 'Save failed';
-                        localModeStatus.className = 'settings-save-status error';
-                    }
-                    setTimeout(function () { localModeStatus.textContent = ''; }, 5000);
-                })
-                .catch(function () {
-                    localModeSaveBtn.disabled = false;
-                    localModeStatus.textContent = 'Network error';
-                    localModeStatus.className = 'settings-save-status error';
-                    setTimeout(function () { localModeStatus.textContent = ''; }, 3000);
-                });
-            });
-        }
 
         authSetBtn.addEventListener('click', function () {
             var pw = authNewPw.value;
@@ -1467,12 +1408,9 @@
                 authNewPw.value = '';
                 authConfirmPw.value = '';
                 if (resp.ok) {
-                    authMsg.textContent = 'Password set — service restarting...';
+                    authMsg.textContent = 'Restarting Services and Reloading...';
                     authMsg.className = 'settings-save-status success';
-                    authStatusEl.textContent = 'Enabled (bcrypt)';
-                    authStatusEl.style.color = 'var(--green)';
-                    authClearBtn.style.display = '';
-                    setTimeout(function () { authMsg.textContent = 'Service restarted'; }, 4000);
+                    setTimeout(function () { location.reload(); }, 6000);
                 } else {
                     authMsg.textContent = resp.data.error || 'Failed';
                     authMsg.className = 'settings-save-status error';
@@ -1498,12 +1436,9 @@
             .then(function (resp) {
                 authClearBtn.disabled = false;
                 if (resp.ok) {
-                    authMsg.textContent = 'Auth disabled — service restarting...';
+                    authMsg.textContent = 'Restarting Services and Reloading...';
                     authMsg.className = 'settings-save-status success';
-                    authStatusEl.textContent = 'Disabled — dashboard is public';
-                    authStatusEl.style.color = 'var(--yellow)';
-                    authClearBtn.style.display = 'none';
-                    setTimeout(function () { authMsg.textContent = 'Service restarted'; }, 4000);
+                    setTimeout(function () { location.reload(); }, 6000);
                 } else {
                     authMsg.textContent = resp.data.error || 'Failed';
                     authMsg.className = 'settings-save-status error';

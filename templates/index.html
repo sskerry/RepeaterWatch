@@ -28,26 +28,23 @@
             <h1>RepeaterWatch</h1>
         </div>
         {% if auth_enabled %}
-        {% if is_authenticated %}
-        <a href="/logout" class="logout-btn">Logout</a>
+            {% if is_authenticated %}
+            <a href="/logout" class="logout-btn">Logout</a>
+            {% else %}
+            <a href="/login" class="logout-btn">Login</a>
+            {% endif %}
         {% else %}
-        <a href="/login" class="logout-btn">Login</a>
-        {% endif %}
+            <span class="auth-badge auth-badge-open">No Auth</span>
         {% endif %}
     </header>
 
-    {% if local_mode and not auth_enabled %}
-    <div style="background: #b8860b; color: #fff; text-align: center; padding: 8px 16px; font-size: 0.85rem; font-weight: 600;">
-        LOCAL MODE — No authentication required. Do not expose to the internet without setting a password.
-    </div>
-    {% endif %}
 
     <!-- Tab Bar -->
     <nav id="tab-bar">
         <button class="tab-btn active" data-tab="meshcore">MeshCore</button>
         <button class="tab-btn" data-tab="raspberry-pi">Raspberry Pi</button>
         <button class="tab-btn" data-tab="sensors">Sensors</button>
-        {% if is_authenticated or (local_mode and not auth_enabled) %}
+        {% if not auth_enabled or is_authenticated %}
         <button class="tab-btn" data-tab="tools">Tools</button>
         <button class="tab-btn" data-tab="settings">Settings</button>
         {% endif %}
@@ -191,7 +188,7 @@
                         <tbody id="neighbors-tbody"></tbody>
                     </table>
                 </div>
-                {% if is_authenticated or (local_mode and not auth_enabled) %}
+                {% if not auth_enabled or is_authenticated %}
                 <div style="text-align:center; margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--border);">
                     <button id="neighbors-delete-btn" class="danger-btn">Delete Neighbours</button>
                     <span id="neighbors-delete-status" class="settings-save-status" style="display:block; margin-top:6px;"></span>
@@ -348,7 +345,7 @@
         <div class="sensor-config-bar">
             <span id="sensor-poll-status" class="sensor-poll-badge sensor-poll-off">Polling Off</span>
             <span id="sensor-active-count" class="sensor-active-count">No sensors enabled</span>
-            {% if is_authenticated or (local_mode and not auth_enabled) %}
+            {% if not auth_enabled or is_authenticated %}
             <button id="sensor-manage-btn" class="sensor-manage-btn">&#x2B; Manage Sensors</button>
             {% endif %}
         </div>
@@ -357,7 +354,7 @@
         <div id="sensor-empty-state" class="sensor-empty-state" style="display:none;">
             <div class="sensor-empty-icon">&#x1F4E1;</div>
             <h3>No Sensors Enabled</h3>
-            {% if is_authenticated or (local_mode and not auth_enabled) %}
+            {% if not auth_enabled or is_authenticated %}
             <p>Click <strong>Manage Sensors</strong> to enable connected hardware.</p>
             <button class="sensor-manage-btn-lg" onclick="document.getElementById('sensor-manage-btn').click()">
                 &#x2B; Add a Sensor
@@ -527,7 +524,7 @@
     <!-- ══════════════════════════════════════════
          Manage Sensors Modal (admin only)
     ══════════════════════════════════════════ -->
-    {% if is_authenticated or (local_mode and not auth_enabled) %}
+    {% if not auth_enabled or is_authenticated %}
     <div id="sensor-modal-overlay" class="sensor-modal-overlay" style="display:none;">
         <div class="sensor-modal">
             <div class="sensor-modal-header">
@@ -859,26 +856,6 @@
                 <div class="card-actions">
                     <button id="db-reset-btn" class="danger-btn">Delete All Data</button>
                     <span id="db-reset-status" class="settings-save-status"></span>
-                </div>
-            </div>
-
-            <div class="tool-card settings-card">
-                <div class="tool-card-header">
-                    <span class="tool-icon">&#x1F310;</span>
-                    <h3>Access Mode</h3>
-                </div>
-                <div class="settings-group">
-                    <div class="settings-row">
-                        <label for="auth-local-mode">Local mode — no password required</label>
-                        <label class="toggle-switch">
-                            <input type="checkbox" id="auth-local-mode" />
-                            <span class="toggle-slider"></span>
-                        </label>
-                    </div>
-                </div>
-                <div class="card-actions">
-                    <button id="auth-local-mode-save-btn" class="save-btn">Save</button>
-                    <span id="auth-local-mode-status" class="settings-save-status"></span>
                 </div>
             </div>
 

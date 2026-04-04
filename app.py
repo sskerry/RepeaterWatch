@@ -120,53 +120,13 @@ def create_app() -> Flask:
     def _is_authenticated():
         return session.get("authenticated", False)
 
-    # Dangerous paths that require auth when not in local mode.
-    # If no password is set and local mode is off, these are inaccessible.
-    _ALWAYS_AUTH_PATHS = (
-        "/ws/",                       # Full shell / serial terminal
-        "/api/v1/system/reboot",      # Reboot the Pi
-        "/api/v1/firmware/flash",     # Flash firmware
-        "/api/v1/radio/reset",        # Reset radio via GPIO
-        "/api/v1/radio/bootloader",   # Enter bootloader via GPIO
-        "/api/v1/radio/usb",          # Toggle USB relay
-        "/api/v1/database/reset",     # Wipe all data
-        "/api/v1/neighbors/delete",   # Delete all neighbors
-        "/api/v1/neighbors/purge",    # Purge old neighbors
-        "/api/v1/auth/clear",         # Disable authentication
-        "/api/v1/auth/settings",      # Change security settings
-    )
-
-    if config.LOCAL_MODE:
-        logger.warning("LOCAL MODE ENABLED — all endpoints accessible without authentication")
-        logger.warning("Do NOT expose this instance to the internet without setting a password")
-
     @app.before_request
     def require_auth():
         # Always allow static files and login/logout
         if request.endpoint in ("login", "logout", "static", "auth_nonce"):
             return None
 
-        # Local mode: skip all auth checks when no password is configured.
-        # This allows running on a trusted LAN without needing to set a password.
-        if config.LOCAL_MODE and not _auth_enabled():
-            return None
-
-        # Dangerous endpoints require authentication.
-        # If no password is set (and local mode is off), these are blocked
-        # until a password is configured — prevents accidental exposure.
-        path = request.path
-        if any(path.startswith(p) or path == p for p in _ALWAYS_AUTH_PATHS):
-            if not _is_authenticated():
-                if not _auth_enabled():
-                    return jsonify({
-                        "error": "This action requires authentication. "
-                                 "Set a password in Settings first, "
-                                 "or enable MESHCORE_LOCAL_MODE=1 for trusted networks."
-                    }), 403
-                return jsonify({"error": "Authentication required"}), 401
-            return None
-
-        # If auth is not configured, everything else is public
+        # No password configured — everything is accessible
         if not _auth_enabled():
             return None
 
@@ -174,11 +134,11 @@ def create_app() -> Flask:
         if request.method == "GET":
             return None
 
-        # POST/PUT/DELETE/PATCH on API require authentication
-        if request.path.startswith("/api/") and request.method in _WRITE_METHODS:
-            if not _is_authenticated():
+        # All write operations require authentication when a password is set
+        if not _is_authenticated():
+            if request.path.startswith("/api/") or request.path.startswith("/ws/"):
                 return jsonify({"error": "Authentication required"}), 401
-            return None
+            return redirect(url_for("login"))
 
         return None
 
@@ -233,7 +193,6 @@ def create_app() -> Flask:
             "index.html",
             auth_enabled=_auth_enabled(),
             is_authenticated=_is_authenticated(),
-            local_mode=config.LOCAL_MODE,
         )
 
     # Start collector

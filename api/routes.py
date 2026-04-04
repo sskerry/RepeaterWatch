@@ -23,6 +23,14 @@ except ImportError:
 
 logger = logging.getLogger(__name__)
 
+
+def _has_full_access():
+    """True when the user has full access: either logged in, or no password is set."""
+    if session.get("authenticated", False):
+        return True
+    # No password configured — everything is open
+    return not (os.environ.get("MESHCORE_PASSWORD_HASH") or os.environ.get("MESHCORE_PASSWORD"))
+
 MANAGED_SERVICES = ["mctomqtt", "SerialMux", "RepeaterWatch"]
 
 api = Blueprint("api", __name__, url_prefix="/api/v1")
@@ -59,8 +67,8 @@ def device_info():
         "uptime_secs": uptime,
         "hardware": os.environ.get("MESHCORE_HARDWARE", ""),
     }
-    # Only expose sensitive details to authenticated users
-    if session.get("authenticated", False):
+    # Only expose sensitive details when user has full access
+    if _has_full_access():
         result["public_key"] = pk
         result["lat"] = lat
         result["lon"] = lon
@@ -345,8 +353,8 @@ def stats_pi_snapshot():
         "uptime_secs": uptime,
         "process_count": proc_count,
     }
-    # Only expose detailed system info to authenticated users
-    if session.get("authenticated", False):
+    # Only expose detailed system info when user has full access
+    if _has_full_access():
         result["top_processes"] = top_procs
         result["platform"] = {
             "system": platform.system(),
@@ -721,11 +729,10 @@ def auth_status():
     result = {
         "auth_enabled": has_hash or has_plain,
         "is_authenticated": authenticated,
-        "local_mode": config.LOCAL_MODE,
     }
     # Only expose security configuration to authenticated users
-    # (or when in local mode without auth, since the user has full access)
-    if authenticated or (config.LOCAL_MODE and not (has_hash or has_plain)):
+    # (or when no auth is enabled, since the user has full access)
+    if authenticated or not (has_hash or has_plain):
         result["method"] = "bcrypt" if has_hash else "plaintext" if has_plain else "none"
         result["max_attempts"] = config.LOGIN_MAX_ATTEMPTS
         result["lockout_secs"] = config.LOGIN_LOCKOUT_SECS
@@ -783,11 +790,6 @@ def auth_update_settings():
         if val < 30 or val > 86400:
             return jsonify({"error": "lockout_secs must be 30-86400"}), 400
         _upsert_env("MESHCORE_LOGIN_LOCKOUT_SECS", str(val))
-        changed = True
-
-    if "local_mode" in data:
-        val = "1" if data["local_mode"] else "0"
-        _upsert_env("MESHCORE_LOCAL_MODE", val)
         changed = True
 
     if "trusted_proxies" in data:

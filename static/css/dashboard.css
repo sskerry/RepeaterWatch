@@ -176,6 +176,23 @@ header {
     border-color: rgba(255,255,255,0.3);
 }
 
+.auth-badge {
+    margin-left: auto;
+    font-size: 0.7rem;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    padding: 3px 8px;
+    border-radius: var(--radius);
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+.auth-badge-open {
+    color: rgba(255,255,255,0.5);
+    border: 1px solid rgba(255,255,255,0.15);
+}
+
 /* ── Tab Bar ───────────────────────────────────────────────── */
 #tab-bar {
     background: var(--bg-tab-bar);
