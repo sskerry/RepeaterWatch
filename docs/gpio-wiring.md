@@ -146,7 +146,7 @@ Pi GND (Pin 6)      ──► Relay module GND
 Normal operation: relay off → NO open → VBUS cut → Ikoka on battery power
 Flashing:         relay on  → NO closed → VBUS connected → DFU enumeration
 
-**STATUS: Partially confirmed on meshcore-site3 (2026-04-04)**
+**STATUS: Partially confirmed (2026-04-04)**
 - [x] Confirm DFU enumeration requires VBUS to be present — **confirmed**, nRF52840 will not enumerate without VBUS
 - [x] Confirm USB relay requires RS232/UART firmware — **confirmed**, standard USB firmware loses serial when VBUS is cut
 - [ ] Confirm relay interrupts VBUS only (not full USB cable)
@@ -343,7 +343,7 @@ pin, and vice versa. Both sides are 3.3V, so no level shifter or resistors are n
 
 The `install.sh` script handles this automatically when you choose "Serial (UART)" mode.
 
-**STATUS: Confirmed working on meshcore-site3 (Nebra conversion, Ikoka Stick / XIAO nRF52840)**
+**STATUS: Confirmed working (Nebra conversion, Ikoka Stick / XIAO nRF52840)**
 Not yet tested with other nRF-based radios, but should work with any that support the RS232 firmware.
 
 ---

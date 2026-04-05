@@ -7,3 +7,6 @@ __pycache__/
 .claude/
 CLAUDE.md
 .env
+PROGRESS.md
+docs/SESSION-LOG.md
+docs/ARCHITECTURE.md

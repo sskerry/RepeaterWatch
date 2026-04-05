@@ -98,7 +98,7 @@ If exposing to the internet: use HTTPS (reverse proxy), set a strong password, a
 
 - [MrAlders0n](https://github.com/MrAlders0n) — Original author
 - [jjkroell](https://github.com/jjkroell) (VE7KOD) — UX overhaul, dark/light theme, mobile layout, sensor management, install/uninstall scripts
-- [sskerry](https://github.com/sskerry) (MYCALL) — Security hardening, CSRF, fail2ban, upgrade script, bug fixes
+- [sskerry](https://github.com/sskerry) — Security hardening, CSRF, fail2ban, upgrade script, bug fixes
 
 ## License
 

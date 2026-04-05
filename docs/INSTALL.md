@@ -1,7 +1,6 @@
 # RepeaterWatch — Installation Guide
 ## Raspberry Pi 4 + Ikoka Stick (Seeed Studio XIAO nRF52840)
 
-**Written for:** MYCALL / CLUB1 / CLUB2
 **Validated on:** Debian GNU/Linux 13 (trixie), Python 3.13
 **Last updated:** 2026-03-08
 
@@ -595,14 +594,14 @@ ls -lh "$BACKUP_DIR"
 ```
 
 This creates a timestamped folder in the home directory of whichever user you are logged
-in as (e.g. `/home/claude/backup-meshcore-site2-20260311-1430/`).
+in as (e.g. `/home/pi/backup-my-repeater-20260311-1430/`).
 
 **Optionally copy the backup to your Mac** for safe keeping:
 
 ```bash
 # Run this on your Mac (replace PI_IP and username as needed)
-scp -i ~/.ssh/YOUR_SSH_KEY -r \
-  claude@PI_IP:~/backup-* \
+scp -i ~/.ssh/YOUR_KEY -r \
+  YOUR_USER@PI_IP:~/backup-* \
   ~/backups/
 ```
 
@@ -630,14 +629,14 @@ From your Mac, run the same rsync command used during install:
 rsync -av --exclude='.git' --exclude='venv' --exclude='*.pyc' \
   --exclude='__pycache__' --exclude='*.db' --exclude='.env' \
   /path/to/RepeaterWatch/ claude@PI_IP:/tmp/RepeaterWatch/
-ssh -i ~/.ssh/YOUR_SSH_KEY claude@PI_IP \
+ssh YOUR_USER@PI_IP \
   "sudo cp -r /tmp/RepeaterWatch/. /opt/RepeaterWatch/"
 ```
 
 Then restart the service:
 
 ```bash
-ssh -i ~/.ssh/YOUR_SSH_KEY claude@PI_IP \
+ssh YOUR_USER@PI_IP \
   "sudo systemctl restart RepeaterWatch"
 ```
 
@@ -645,7 +644,7 @@ The `.env` file and SQLite database are excluded from rsync and will not be affe
 The venv is also excluded — if `requirements.txt` changed in the update, re-run:
 
 ```bash
-ssh -i ~/.ssh/YOUR_SSH_KEY claude@PI_IP \
+ssh YOUR_USER@PI_IP \
   "sudo /opt/RepeaterWatch/venv/bin/pip install -r /opt/RepeaterWatch/requirements.txt"
 ```
 
@@ -656,7 +655,7 @@ ssh -i ~/.ssh/YOUR_SSH_KEY claude@PI_IP \
 Check the service started cleanly:
 
 ```bash
-ssh -i ~/.ssh/YOUR_SSH_KEY claude@PI_IP \
+ssh YOUR_USER@PI_IP \
   "sudo systemctl status RepeaterWatch --no-pager && sudo journalctl -u RepeaterWatch -n 20 --no-pager"
 ```
 
