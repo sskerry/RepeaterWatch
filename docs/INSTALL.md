@@ -59,7 +59,7 @@ The Pi's UART port (`/dev/ttyAMA0`) can be claimed by three things that must be 
 - Ikoka stick plugged in via USB **before booting**
 - `mctomqtt` (LetsMesh service) already installed and running
 - Internet access on the Pi (for apt and pip installs)
-- The RepeaterWatch project files on your Mac (synced via Nextcloud or cloned from GitHub)
+- The RepeaterWatch project files on your local machine (cloned from GitHub)
 
 ---
 
