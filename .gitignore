@@ -9,3 +9,9 @@ __pycache__/
 PROGRESS.md
 docs/SESSION-LOG.md
 docs/ARCHITECTURE.md
+
+# Never commit: contain infra IPs, key paths, broker credentials, fleet inventory.
+CLAUDE.md
+MIGRATED.md
+memory/
+docs/PROVISIONING.md
