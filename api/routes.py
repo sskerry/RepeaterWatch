@@ -852,6 +852,114 @@ def sensors_config_post():
     return jsonify({"ok": True, "polling_enabled": any_enabled, "restart_required": True})
 
 
+# ── Radio Config API ──────────────────────────────────────
+
+@api.route("/radios/config")
+def radios_config_get():
+    """Return current radio config (readable by admin only)."""
+    if not _has_full_access():
+        return jsonify({"error": "Unauthorized"}), 401
+
+    radios_out = []
+    for r in config.RADIOS:
+        radios_out.append({
+            "id": r["id"],
+            "label": r.get("label", "Radio"),
+            "iata": r.get("iata", ""),
+            "serial_port": r.get("serial_port", ""),
+            "flash_serial_port": r.get("flash_serial_port", ""),
+            "reset_gpio_pin": r.get("reset_gpio_pin"),
+            "usb_relay_gpio_pin": r.get("usb_relay_gpio_pin"),
+            "terminal_serial_port": r.get("terminal_serial_port", ""),
+        })
+    return jsonify({
+        "dual_radio_mode": config.DUAL_RADIO_MODE,
+        "radios": radios_out,
+    })
+
+
+@api.route("/radios/config", methods=["POST"])
+def radios_config_post():
+    """Write radio config env vars to .env. Requires service restart to apply."""
+    if not _has_full_access():
+        return jsonify({"error": "Unauthorized"}), 401
+
+    data = request.get_json(force=True, silent=True) or {}
+    errors = []
+
+    # Validate dual_radio_mode
+    drm = data.get("dual_radio_mode")
+    if drm is not None:
+        if drm not in (0, 1, False, True):
+            errors.append("dual_radio_mode must be 0/1 or true/false")
+
+    # Validate per-radio fields from the 'radios' list
+    radios = data.get("radios")
+    radio_a = None
+    radio_b = None
+    if radios is not None:
+        if not isinstance(radios, list):
+            errors.append("radios must be a list")
+        else:
+            for r in radios:
+                if not isinstance(r, dict):
+                    errors.append("each radio entry must be an object")
+                    continue
+                rid = r.get("id")
+                if rid not in ("a", "b"):
+                    errors.append("unknown radio id: " + str(rid))
+                    continue
+                for pin_field in ("reset_gpio_pin", "usb_relay_gpio_pin"):
+                    v = r.get(pin_field)
+                    if v is not None and not isinstance(v, int):
+                        errors.append(f"radio {rid}: {pin_field} must be an integer")
+                if rid == "a":
+                    radio_a = r
+                elif rid == "b":
+                    radio_b = r
+
+    if errors:
+        return jsonify({"error": "; ".join(errors)}), 400
+
+    # Write env vars
+    if drm is not None:
+        _upsert_env("MESHCORE_DUAL_RADIO_MODE", "1" if drm else "0")
+
+    if radio_a is not None:
+        if "label" in radio_a:
+            _upsert_env("MESHCORE_RADIO_A_LABEL", radio_a["label"])
+        if "iata" in radio_a:
+            _upsert_env("MESHCORE_IATA_A", radio_a["iata"])
+        if "serial_port" in radio_a:
+            _upsert_env("MESHCORE_SERIAL_PORT", radio_a["serial_port"])
+        if "flash_serial_port" in radio_a:
+            _upsert_env("MESHCORE_FLASH_SERIAL_PORT", radio_a["flash_serial_port"])
+        if "terminal_serial_port" in radio_a:
+            _upsert_env("MESHCORE_TERMINAL_SERIAL_PORT", radio_a["terminal_serial_port"])
+        if "reset_gpio_pin" in radio_a and radio_a["reset_gpio_pin"] is not None:
+            _upsert_env("MESHCORE_RADIO_RESET_GPIO", str(radio_a["reset_gpio_pin"]))
+        if "usb_relay_gpio_pin" in radio_a and radio_a["usb_relay_gpio_pin"] is not None:
+            _upsert_env("MESHCORE_USB_RELAY_GPIO", str(radio_a["usb_relay_gpio_pin"]))
+
+    if radio_b is not None:
+        if "label" in radio_b:
+            _upsert_env("MESHCORE_RADIO_B_LABEL", radio_b["label"])
+        if "iata" in radio_b:
+            _upsert_env("MESHCORE_IATA_B", radio_b["iata"])
+        if "serial_port" in radio_b:
+            _upsert_env("MESHCORE_SERIAL_PORT_B", radio_b["serial_port"])
+        if "flash_serial_port" in radio_b:
+            _upsert_env("MESHCORE_FLASH_SERIAL_PORT_B", radio_b["flash_serial_port"])
+        if "terminal_serial_port" in radio_b:
+            _upsert_env("MESHCORE_TERMINAL_SERIAL_PORT_B", radio_b["terminal_serial_port"])
+        if "reset_gpio_pin" in radio_b and radio_b["reset_gpio_pin"] is not None:
+            _upsert_env("MESHCORE_RADIO_RESET_GPIO_B", str(radio_b["reset_gpio_pin"]))
+        if "usb_relay_gpio_pin" in radio_b and radio_b["usb_relay_gpio_pin"] is not None:
+            _upsert_env("MESHCORE_USB_RELAY_GPIO_B", str(radio_b["usb_relay_gpio_pin"]))
+
+    return jsonify({"ok": True, "restart_required": True})
+
+
 # ── Authentication Management ─────────────────────────────
 
 def _env_path():

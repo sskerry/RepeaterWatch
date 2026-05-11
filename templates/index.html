@@ -55,6 +55,11 @@
     ══════════════════════════════════════════ -->
     <div id="tab-meshcore" class="tab-panel active">
 
+        <!-- Radio tab strip — hidden in single-radio mode, shown in dual-radio mode -->
+        <div id="radio-tabs" style="display:none;">
+            <!-- tabs populated by JS -->
+        </div>
+
         <!-- Device Info Card -->
         <div class="device-info-card">
             <div class="device-info-grid">
@@ -907,6 +912,99 @@
                     <button id="auth-settings-save-btn" class="save-btn">Save</button>
                     <span id="auth-settings-status" class="settings-save-status"></span>
                 </div>
+            </div>
+
+            <!-- Dual-radio mode -->
+            <div class="tool-card settings-card" id="dual-radio-settings-card">
+                <div class="tool-card-header">
+                    <span class="tool-icon">&#x1F4F6;</span>
+                    <h3>Dual-Radio Mode</h3>
+                </div>
+                <div class="settings-group">
+                    <div class="settings-row">
+                        <label for="dual-radio-toggle" class="settings-label">Dual-radio mode (cross-band repeater)</label>
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="dual-radio-toggle" />
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </div>
+                    <p class="tool-desc" style="margin-top:6px; font-size:0.8em;">Requires two physical radios, two SerialMux instances, distinct GPIO pins. See PROVISIONING.md before enabling.</p>
+                </div>
+
+                <!-- Radio A config (always shown) -->
+                <div class="settings-group" id="radio-a-config-section">
+                    <label class="settings-label">Radio A Configuration</label>
+                    <div class="settings-row">
+                        <label for="radio-a-label">Label</label>
+                        <input type="text" id="radio-a-label" class="settings-input" placeholder="Radio" />
+                    </div>
+                    <div class="settings-row">
+                        <label for="radio-a-iata">IATA</label>
+                        <input type="text" id="radio-a-iata" class="settings-input" placeholder="FH1A" />
+                    </div>
+                    <div class="settings-row">
+                        <label for="radio-a-serial">Serial port</label>
+                        <input type="text" id="radio-a-serial" class="settings-input" placeholder="/dev/ttyV0" spellcheck="false" />
+                    </div>
+                    <div class="settings-row">
+                        <label for="radio-a-flash">Flash serial port</label>
+                        <input type="text" id="radio-a-flash" class="settings-input" placeholder="/dev/serial/by-id/..." spellcheck="false" />
+                    </div>
+                    <div class="settings-row">
+                        <label for="radio-a-terminal">Terminal serial port</label>
+                        <input type="text" id="radio-a-terminal" class="settings-input" placeholder="/dev/ttyV2" spellcheck="false" />
+                    </div>
+                    <div class="settings-row">
+                        <label for="radio-a-reset-gpio">Reset GPIO pin</label>
+                        <input type="number" id="radio-a-reset-gpio" class="settings-input" style="width:80px;" min="0" max="40" placeholder="4" />
+                    </div>
+                    <div class="settings-row">
+                        <label for="radio-a-relay-gpio">USB relay GPIO pin</label>
+                        <input type="number" id="radio-a-relay-gpio" class="settings-input" style="width:80px;" min="0" max="40" placeholder="17" />
+                    </div>
+                </div>
+
+                <!-- Radio B config — revealed when dual-radio toggled on -->
+                <div class="settings-group" id="radio-b-config-section" style="display:none;">
+                    <label class="settings-label">Radio B Configuration</label>
+                    <p class="tool-desc" style="margin-top:0; margin-bottom:8px; font-size:0.8em;">GPIO pins must be distinct from Radio A (defaults: reset=4, relay=17).</p>
+                    <div class="settings-row">
+                        <label for="radio-b-label">Label</label>
+                        <input type="text" id="radio-b-label" class="settings-input" placeholder="Radio B" />
+                    </div>
+                    <div class="settings-row">
+                        <label for="radio-b-iata">IATA</label>
+                        <input type="text" id="radio-b-iata" class="settings-input" placeholder="FH1B" />
+                    </div>
+                    <div class="settings-row">
+                        <label for="radio-b-serial">Serial port</label>
+                        <input type="text" id="radio-b-serial" class="settings-input" placeholder="/dev/ttyV0b" spellcheck="false" />
+                    </div>
+                    <div class="settings-row">
+                        <label for="radio-b-flash">Flash serial port</label>
+                        <input type="text" id="radio-b-flash" class="settings-input" placeholder="/dev/serial/by-id/..." spellcheck="false" />
+                    </div>
+                    <div class="settings-row">
+                        <label for="radio-b-terminal">Terminal serial port</label>
+                        <input type="text" id="radio-b-terminal" class="settings-input" placeholder="/dev/ttyV2b" spellcheck="false" />
+                    </div>
+                    <div class="settings-row">
+                        <label for="radio-b-reset-gpio">Reset GPIO pin</label>
+                        <input type="number" id="radio-b-reset-gpio" class="settings-input" style="width:80px;" min="0" max="40" placeholder="22" />
+                    </div>
+                    <div class="settings-row">
+                        <label for="radio-b-relay-gpio">USB relay GPIO pin</label>
+                        <input type="number" id="radio-b-relay-gpio" class="settings-input" style="width:80px;" min="0" max="40" placeholder="23" />
+                    </div>
+                </div>
+
+                <div class="card-actions">
+                    <button id="dual-radio-save-btn" class="save-btn">Save &amp; restart required</button>
+                    <span id="dual-radio-save-status" class="settings-save-status"></span>
+                </div>
+                <p class="tool-desc" id="dual-radio-restart-hint" style="display:none; margin-top:8px; font-size:0.8em; color:var(--yellow);">
+                    Saved. Restart RepeaterWatch.service from the Services page to apply.
+                </p>
             </div>
 
             <p class="tool-desc" style="text-align:center; opacity:0.6; margin-top:8px;">Use HTTPS via a reverse proxy when exposing this dashboard to the internet.</p>

@@ -15,6 +15,22 @@
     var sensorChartsInitialized = false;
     var sensorCurrentHours = 6;
 
+    // ── Dual-radio state ─────────────────────────────────
+    var currentRadioId = 'a';
+    var dualRadioMode = false;
+
+    /**
+     * Build a radio-scoped API URL.
+     * In single-radio mode, returns the legacy /api/v1/<path>.
+     * In dual-radio mode, returns /api/v1/radios/<id>/<path>.
+     */
+    function radioUrl(path) {
+        if (dualRadioMode) {
+            return '/api/v1/radios/' + currentRadioId + path;
+        }
+        return '/api/v1' + path;
+    }
+
     var appSettings = {
         power_source: 'ina3221',
         ina_solar_channel: 'ch1',
@@ -320,6 +336,60 @@
         });
     }
 
+    // ── Radio Tabs ────────────────────────────────────────
+
+    /**
+     * Called once after /api/v1/radios is fetched at boot.
+     * Single-radio mode: keeps #radio-tabs hidden — no visible change.
+     * Dual-radio mode: renders a tab per radio inside #radio-tabs and shows it.
+     */
+    function initRadioTabs(radioData) {
+        dualRadioMode = radioData.dual_radio_mode && radioData.radios.length > 1;
+        if (!dualRadioMode) return;
+
+        var container = document.getElementById('radio-tabs');
+        // Clear existing tabs with safe DOM methods
+        while (container.firstChild) {
+            container.removeChild(container.firstChild);
+        }
+
+        radioData.radios.forEach(function (radio) {
+            var btn = document.createElement('button');
+            btn.className = 'radio-tab-btn' + (radio.id === currentRadioId ? ' radio-tab-active' : '');
+            btn.setAttribute('data-radio-id', radio.id);
+            btn.textContent = radio.label || radio.id.toUpperCase();
+
+            // Build title/aria with extra info
+            var titleParts = [radio.label || radio.id];
+            if (radio.iata) titleParts.push('IATA: ' + radio.iata);
+            if (radio.serial_port) titleParts.push(radio.serial_port);
+            btn.title = titleParts.join(' | ');
+            btn.setAttribute('aria-label', titleParts.join(', '));
+
+            btn.addEventListener('click', function () {
+                if (radio.id === currentRadioId) return;
+                currentRadioId = radio.id;
+                container.querySelectorAll('.radio-tab-btn').forEach(function (b) {
+                    b.classList.toggle('radio-tab-active', b.getAttribute('data-radio-id') === currentRadioId);
+                });
+                // Immediate refresh with new radio active
+                if (chartsInitialized) {
+                    refreshMeshCore();
+                }
+            });
+
+            container.appendChild(btn);
+        });
+
+        container.style.display = '';
+    }
+
+    function loadRadioInfo() {
+        return fetchJSON('/api/v1/radios').then(function (data) {
+            initRadioTabs(data);
+        }).catch(noop);
+    }
+
     // ── Tabs ─────────────────────────────────────────────
 
     function setupTabs() {
@@ -425,7 +495,7 @@
     function refreshMeshCore() {
         var h = currentHours;
 
-        fetchJSON('/api/v1/device').then(function (d) {
+        fetchJSON(radioUrl('/device')).then(function (d) {
             document.getElementById('di-name').textContent = d.name || '--';
             document.getElementById('di-hardware') && (document.getElementById('di-hardware').textContent = d.board || d.hardware || '--');
             (function(fw) {
@@ -444,30 +514,31 @@
             NeighborMap.setRepeaterInfo(d);
         }).catch(noop);
 
+        // Power stats are Pi-wide (INA3221) or per-radio (onboard battery)
         if (appSettings.power_source === 'ina3221') {
             fetchJSON('/api/v1/stats/power?hours=' + h).then(function (d) {
                 PowerCharts.update(d);
             }).catch(noop);
         } else {
-            fetchJSON('/api/v1/stats/battery?hours=' + h).then(function (d) {
+            fetchJSON(radioUrl('/stats/battery') + '?hours=' + h).then(function (d) {
                 BatteryChart.update(d);
             }).catch(noop);
         }
 
-        fetchJSON('/api/v1/stats/radio?hours=' + h).then(function (d) {
+        fetchJSON(radioUrl('/stats/radio') + '?hours=' + h).then(function (d) {
             RadioChart.update(d);
         }).catch(noop);
 
-        fetchJSON('/api/v1/stats/airtime?hours=' + h).then(function (d) {
+        fetchJSON(radioUrl('/stats/airtime') + '?hours=' + h).then(function (d) {
             AirtimeChart.update(d);
         }).catch(noop);
 
-        fetchJSON('/api/v1/packets/activity?hours=' + h + '&bucket_minutes=' + bucketForHours(h)).then(function (d) {
+        fetchJSON(radioUrl('/packets/activity') + '?hours=' + h + '&bucket_minutes=' + bucketForHours(h)).then(function (d) {
             PacketsChart.update(d);
             updateMeshCoreStatusCards(d);
         }).catch(noop);
 
-        var neighborsReady = fetchJSON('/api/v1/neighbors').then(function (d) {
+        var neighborsReady = fetchJSON(radioUrl('/neighbors')).then(function (d) {
             renderNeighborsTable(d);
             return d;
         }).catch(function () { return []; });
@@ -476,7 +547,7 @@
             NeighborMap.update(neighbors);
         });
 
-        fetchJSON('/api/v1/packets/recent?limit=50').then(function (d) {
+        fetchJSON(radioUrl('/packets/recent') + '?limit=50').then(function (d) {
             renderPacketsTable(d);
         }).catch(noop);
 
@@ -1508,6 +1579,131 @@
                 });
             });
         }
+
+        // ── Dual-radio settings ──────────────────────────────
+        var dualToggle = document.getElementById('dual-radio-toggle');
+        var radioBSection = document.getElementById('radio-b-config-section');
+        var dualSaveBtn = document.getElementById('dual-radio-save-btn');
+        var dualSaveStatus = document.getElementById('dual-radio-save-status');
+        var dualRestartHint = document.getElementById('dual-radio-restart-hint');
+
+        if (!dualToggle) return;
+
+        // Load current radio config into the form
+        fetchJSON('/api/v1/radios/config').then(function (d) {
+            dualToggle.checked = !!d.dual_radio_mode;
+            radioBSection.style.display = d.dual_radio_mode ? '' : 'none';
+
+            d.radios.forEach(function (r) {
+                if (r.id === 'a') {
+                    var lbl = document.getElementById('radio-a-label');
+                    var iata = document.getElementById('radio-a-iata');
+                    var ser = document.getElementById('radio-a-serial');
+                    var flash = document.getElementById('radio-a-flash');
+                    var term = document.getElementById('radio-a-terminal');
+                    var resetGpio = document.getElementById('radio-a-reset-gpio');
+                    var relayGpio = document.getElementById('radio-a-relay-gpio');
+                    if (lbl) lbl.value = r.label || '';
+                    if (iata) iata.value = r.iata || '';
+                    if (ser) ser.value = r.serial_port || '';
+                    if (flash) flash.value = r.flash_serial_port || '';
+                    if (term) term.value = r.terminal_serial_port || '';
+                    if (resetGpio && r.reset_gpio_pin != null) resetGpio.value = r.reset_gpio_pin;
+                    if (relayGpio && r.usb_relay_gpio_pin != null) relayGpio.value = r.usb_relay_gpio_pin;
+                } else if (r.id === 'b') {
+                    var lblB = document.getElementById('radio-b-label');
+                    var iataB = document.getElementById('radio-b-iata');
+                    var serB = document.getElementById('radio-b-serial');
+                    var flashB = document.getElementById('radio-b-flash');
+                    var termB = document.getElementById('radio-b-terminal');
+                    var resetGpioB = document.getElementById('radio-b-reset-gpio');
+                    var relayGpioB = document.getElementById('radio-b-relay-gpio');
+                    if (lblB) lblB.value = r.label || '';
+                    if (iataB) iataB.value = r.iata || '';
+                    if (serB) serB.value = r.serial_port || '';
+                    if (flashB) flashB.value = r.flash_serial_port || '';
+                    if (termB) termB.value = r.terminal_serial_port || '';
+                    if (resetGpioB && r.reset_gpio_pin != null) resetGpioB.value = r.reset_gpio_pin;
+                    if (relayGpioB && r.usb_relay_gpio_pin != null) relayGpioB.value = r.usb_relay_gpio_pin;
+                }
+            });
+        }).catch(noop);
+
+        dualToggle.addEventListener('change', function () {
+            radioBSection.style.display = dualToggle.checked ? '' : 'none';
+        });
+
+        dualSaveBtn.addEventListener('click', function () {
+            var body = {
+                dual_radio_mode: dualToggle.checked ? 1 : 0,
+                radios: [],
+            };
+
+            var radioA = { id: 'a' };
+            var aLabel = document.getElementById('radio-a-label');
+            var aIata = document.getElementById('radio-a-iata');
+            var aSerial = document.getElementById('radio-a-serial');
+            var aFlash = document.getElementById('radio-a-flash');
+            var aTerm = document.getElementById('radio-a-terminal');
+            var aReset = document.getElementById('radio-a-reset-gpio');
+            var aRelay = document.getElementById('radio-a-relay-gpio');
+            if (aLabel && aLabel.value.trim()) radioA.label = aLabel.value.trim();
+            if (aIata && aIata.value.trim()) radioA.iata = aIata.value.trim();
+            if (aSerial && aSerial.value.trim()) radioA.serial_port = aSerial.value.trim();
+            if (aFlash && aFlash.value.trim()) radioA.flash_serial_port = aFlash.value.trim();
+            if (aTerm && aTerm.value.trim()) radioA.terminal_serial_port = aTerm.value.trim();
+            if (aReset && aReset.value !== '') radioA.reset_gpio_pin = parseInt(aReset.value, 10);
+            if (aRelay && aRelay.value !== '') radioA.usb_relay_gpio_pin = parseInt(aRelay.value, 10);
+            body.radios.push(radioA);
+
+            if (dualToggle.checked) {
+                var radioB = { id: 'b' };
+                var bLabel = document.getElementById('radio-b-label');
+                var bIata = document.getElementById('radio-b-iata');
+                var bSerial = document.getElementById('radio-b-serial');
+                var bFlash = document.getElementById('radio-b-flash');
+                var bTerm = document.getElementById('radio-b-terminal');
+                var bReset = document.getElementById('radio-b-reset-gpio');
+                var bRelay = document.getElementById('radio-b-relay-gpio');
+                if (bLabel && bLabel.value.trim()) radioB.label = bLabel.value.trim();
+                if (bIata && bIata.value.trim()) radioB.iata = bIata.value.trim();
+                if (bSerial && bSerial.value.trim()) radioB.serial_port = bSerial.value.trim();
+                if (bFlash && bFlash.value.trim()) radioB.flash_serial_port = bFlash.value.trim();
+                if (bTerm && bTerm.value.trim()) radioB.terminal_serial_port = bTerm.value.trim();
+                if (bReset && bReset.value !== '') radioB.reset_gpio_pin = parseInt(bReset.value, 10);
+                if (bRelay && bRelay.value !== '') radioB.usb_relay_gpio_pin = parseInt(bRelay.value, 10);
+                body.radios.push(radioB);
+            }
+
+            dualSaveBtn.disabled = true;
+            dualSaveStatus.textContent = 'Saving...';
+            dualSaveStatus.className = 'settings-save-status';
+
+            fetch('/api/v1/radios/config', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF_TOKEN },
+                body: JSON.stringify(body),
+            })
+            .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, data: d }; }); })
+            .then(function (resp) {
+                dualSaveBtn.disabled = false;
+                if (resp.ok) {
+                    dualSaveStatus.textContent = 'Saved';
+                    dualSaveStatus.className = 'settings-save-status success';
+                    if (dualRestartHint) dualRestartHint.style.display = '';
+                } else {
+                    dualSaveStatus.textContent = resp.data.error || 'Save failed';
+                    dualSaveStatus.className = 'settings-save-status error';
+                }
+                setTimeout(function () { dualSaveStatus.textContent = ''; }, 5000);
+            })
+            .catch(function () {
+                dualSaveBtn.disabled = false;
+                dualSaveStatus.textContent = 'Network error';
+                dualSaveStatus.className = 'settings-save-status error';
+                setTimeout(function () { dualSaveStatus.textContent = ''; }, 3000);
+            });
+        });
     }
 
     function populateSettingsForm(settings) {
@@ -1583,7 +1779,11 @@
     if (document.getElementById('terminal-connect-btn')) setupTerminal();
     if (document.getElementById('settings-save-btn')) setupSettings();
 
-    loadSettings().then(function () {
+    // Load radio config (tabs) and app settings in parallel, then do initial refresh
+    Promise.all([
+        loadSettings(),
+        loadRadioInfo(),
+    ]).then(function () {
         refreshAll();
     });
 
