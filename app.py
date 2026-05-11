@@ -43,12 +43,31 @@ def get_port_stability(radio_id: str) -> dict:
     )
 
 
+# Path prefixes that are considered hardware-stable. A path is stable if it
+# either points to a USB device by its burnt-in serial number (/dev/serial/by-id/)
+# or addresses a fixed on-board UART that the kernel always names the same
+# (ttyAMA* for the Pi's PL011, ttyS* for the generic 8250-style serial driver,
+# ttyAML* for some Amlogic SoCs). These are wired to dedicated pins, not
+# enumerated by USB, so they don't swap on reboot.
+_STABLE_PORT_PREFIXES = (
+    "/dev/serial/by-id/",
+    "/dev/ttyAMA",
+    "/dev/ttyAML",
+    "/dev/ttyS",
+)
+
+
+def _is_stable_port(path: str) -> bool:
+    return path.startswith(_STABLE_PORT_PREFIXES)
+
+
 def _validate_port_stability() -> None:
     """Check each radio's flash_serial_port and terminal_serial_port.
 
-    If either value is non-empty and does NOT start with /dev/serial/by-id/,
-    log an ERROR-level message and record the radio as unstable.  The
-    virtual serial_port (ttyV0*) is intentionally excluded — it is NOT a
+    A path is considered stable if it's either /dev/serial/by-id/... (USB
+    by-id) or a built-in UART (ttyAMA*/ttyAML*/ttyS*). Kernel-assigned USB
+    names (ttyACM*, ttyUSB*) are flagged — they can swap on enumeration order.
+    The virtual serial_port (ttyV*) is intentionally excluded — it is NOT a
     by-id path and that is correct.
     """
     global _port_stability
@@ -58,24 +77,26 @@ def _validate_port_stability() -> None:
         terminal_ok = True
 
         flash_port = radio.get("flash_serial_port", "")
-        if flash_port and not flash_port.startswith("/dev/serial/by-id/"):
+        if flash_port and not _is_stable_port(flash_port):
             flash_ok = False
             logger.error(
                 "Radio %s: flash_serial_port = %r uses an UNSTABLE kernel-assigned path. "
                 "USB enumeration order can swap this across reboots, causing the wrong "
-                "physical radio to be targeted. Use /dev/serial/by-id/... instead.",
+                "physical radio to be targeted. Use /dev/serial/by-id/... (USB) or a "
+                "built-in UART like /dev/ttyAMA0 (Pi GPIO) instead.",
                 rid, flash_port,
             )
 
         terminal_port = radio.get("terminal_serial_port", "")
-        if terminal_port and not terminal_port.startswith("/dev/serial/by-id/"):
+        if terminal_port and not _is_stable_port(terminal_port):
             # ttyV* virtual ports are intentionally not by-id — only flag real device paths
             if not terminal_port.startswith("/dev/ttyV"):
                 terminal_ok = False
                 logger.error(
                     "Radio %s: terminal_serial_port = %r uses an UNSTABLE kernel-assigned path. "
                     "USB enumeration order can swap this across reboots, causing the wrong "
-                    "physical radio to be targeted. Use /dev/serial/by-id/... instead.",
+                    "physical radio to be targeted. Use /dev/serial/by-id/... (USB) or a "
+                    "built-in UART like /dev/ttyAMA0 (Pi GPIO) instead.",
                     rid, terminal_port,
                 )
 
