@@ -2049,6 +2049,7 @@
                 if (r.id === 'a') {
                     var lbl = document.getElementById('radio-a-label');
                     var iata = document.getElementById('radio-a-iata');
+                    var mode = document.getElementById('radio-a-interface-mode');
                     var ser = document.getElementById('radio-a-serial');
                     var flash = document.getElementById('radio-a-flash');
                     var term = document.getElementById('radio-a-terminal');
@@ -2056,6 +2057,7 @@
                     var relayGpio = document.getElementById('radio-a-relay-gpio');
                     if (lbl) lbl.value = r.label || '';
                     if (iata) iata.value = r.iata || '';
+                    if (mode) mode.value = r.interface_mode || 'single';
                     if (ser) ser.value = r.serial_port || '';
                     if (flash) flash.value = r.flash_serial_port || '';
                     if (term) term.value = r.terminal_serial_port || '';
@@ -2064,6 +2066,7 @@
                 } else if (r.id === 'b') {
                     var lblB = document.getElementById('radio-b-label');
                     var iataB = document.getElementById('radio-b-iata');
+                    var modeB = document.getElementById('radio-b-interface-mode');
                     var serB = document.getElementById('radio-b-serial');
                     var flashB = document.getElementById('radio-b-flash');
                     var termB = document.getElementById('radio-b-terminal');
@@ -2071,6 +2074,7 @@
                     var relayGpioB = document.getElementById('radio-b-relay-gpio');
                     if (lblB) lblB.value = r.label || '';
                     if (iataB) iataB.value = r.iata || '';
+                    if (modeB) modeB.value = r.interface_mode || 'single';
                     if (serB) serB.value = r.serial_port || '';
                     if (flashB) flashB.value = r.flash_serial_port || '';
                     if (termB) termB.value = r.terminal_serial_port || '';
@@ -2093,6 +2097,7 @@
             var radioA = { id: 'a' };
             var aLabel = document.getElementById('radio-a-label');
             var aIata = document.getElementById('radio-a-iata');
+            var aMode = document.getElementById('radio-a-interface-mode');
             var aSerial = document.getElementById('radio-a-serial');
             var aFlash = document.getElementById('radio-a-flash');
             var aTerm = document.getElementById('radio-a-terminal');
@@ -2100,6 +2105,7 @@
             var aRelay = document.getElementById('radio-a-relay-gpio');
             if (aLabel && aLabel.value.trim()) radioA.label = aLabel.value.trim();
             if (aIata && aIata.value.trim()) radioA.iata = aIata.value.trim();
+            if (aMode && aMode.value) radioA.interface_mode = aMode.value;
             if (aSerial && aSerial.value.trim()) radioA.serial_port = aSerial.value.trim();
             if (aFlash && aFlash.value.trim()) radioA.flash_serial_port = aFlash.value.trim();
             if (aTerm && aTerm.value.trim()) radioA.terminal_serial_port = aTerm.value.trim();
@@ -2111,6 +2117,7 @@
                 var radioB = { id: 'b' };
                 var bLabel = document.getElementById('radio-b-label');
                 var bIata = document.getElementById('radio-b-iata');
+                var bMode = document.getElementById('radio-b-interface-mode');
                 var bSerial = document.getElementById('radio-b-serial');
                 var bFlash = document.getElementById('radio-b-flash');
                 var bTerm = document.getElementById('radio-b-terminal');
@@ -2118,6 +2125,7 @@
                 var bRelay = document.getElementById('radio-b-relay-gpio');
                 if (bLabel && bLabel.value.trim()) radioB.label = bLabel.value.trim();
                 if (bIata && bIata.value.trim()) radioB.iata = bIata.value.trim();
+                if (bMode && bMode.value) radioB.interface_mode = bMode.value;
                 if (bSerial && bSerial.value.trim()) radioB.serial_port = bSerial.value.trim();
                 if (bFlash && bFlash.value.trim()) radioB.flash_serial_port = bFlash.value.trim();
                 if (bTerm && bTerm.value.trim()) radioB.terminal_serial_port = bTerm.value.trim();
