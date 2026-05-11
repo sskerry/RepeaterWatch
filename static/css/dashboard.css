@@ -1880,3 +1880,117 @@ footer strong { color: var(--text); }
     color: var(--text-muted);
     font-family: var(--font-mono);
 }
+
+/* ── Port-stability warning badge ──────────────────────── */
+.port-stability-warning {
+    display: inline-block;
+    margin-left: 6px;
+    font-size: 0.9rem;
+    cursor: default;
+    vertical-align: middle;
+}
+
+/* ── Identity mismatch banner ───────────────────────────── */
+.identity-banner {
+    background: rgba(255, 68, 102, 0.12);
+    border-top: 2px solid var(--red);
+    border-bottom: 1px solid rgba(255, 68, 102, 0.3);
+    color: var(--text);
+    padding: 10px var(--pad);
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    font-size: 0.84rem;
+    font-family: var(--font-ui);
+    line-height: 1.5;
+    position: sticky;
+    top: calc(var(--header-h) + var(--tabbar-h));
+    z-index: 90;
+}
+
+.identity-banner-icon {
+    flex-shrink: 0;
+    font-size: 1rem;
+    margin-top: 1px;
+}
+
+.identity-banner-msg {
+    flex: 1;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+}
+
+.identity-banner-btn {
+    display: inline-block;
+    background: var(--bg-elevated);
+    color: var(--text);
+    border: 1px solid var(--red);
+    padding: 3px 10px;
+    border-radius: var(--radius);
+    cursor: pointer;
+    font-family: var(--font-ui);
+    font-size: 0.78rem;
+    font-weight: 600;
+    text-decoration: none;
+    transition: all 0.15s;
+}
+
+.identity-banner-btn:hover:not(:disabled) {
+    background: var(--red);
+    color: #fff;
+    border-color: var(--red);
+}
+
+.identity-banner-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+.identity-banner-err {
+    color: var(--red);
+    font-size: 0.78rem;
+}
+
+/* ── Identity claimed toast ─────────────────────────────── */
+.identity-toast {
+    background: var(--bg-elevated);
+    border-top: 2px solid var(--accent);
+    border-bottom: 1px solid var(--border);
+    padding: 8px var(--pad);
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    font-size: 0.82rem;
+    font-family: var(--font-ui);
+}
+
+.identity-toast-pill {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--accent);
+    border-radius: var(--radius);
+    padding: 5px 10px;
+    color: var(--text);
+}
+
+.identity-toast-close {
+    flex-shrink: 0;
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    font-size: 1.1rem;
+    font-weight: 700;
+    cursor: pointer;
+    padding: 0 4px;
+    line-height: 1;
+    transition: color 0.12s;
+}
+
+.identity-toast-close:hover {
+    color: var(--text);
+}
