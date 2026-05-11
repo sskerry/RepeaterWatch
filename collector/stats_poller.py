@@ -78,6 +78,80 @@ class StatsPoller:
         for reader in self.readers.values():
             reader.disconnect()
 
+    def disconnect_reader(self, radio_id: str) -> bool:
+        """Disconnect a single reader without stopping the poll loop.
+
+        Returns True if the reader existed and was disconnected.
+        """
+        reader = self.readers.get(radio_id)
+        if reader is None:
+            return False
+        reader.disconnect()
+        return True
+
+    def reconnect_reader(self, radio_id: str) -> bool:
+        """Reconnect a single previously-disconnected reader.
+
+        Returns True if the reader existed and connected successfully.
+        The poll loop will see reader.connected==False and call
+        _connect_with_retry on its own, but callers who want immediate
+        reconnection can call this directly.
+        """
+        reader = self.readers.get(radio_id)
+        if reader is None:
+            return False
+        for attempt in range(3):
+            if reader.connect():
+                return True
+            logger.warning(
+                "Reconnect attempt %d failed for radio %s", attempt + 1, radio_id
+            )
+            time.sleep(2)
+        return False
+
+    def reset_radio(self, radio_id: str) -> bool:
+        """Disconnect reader, pulse reset GPIO for the named radio, reconnect.
+
+        This is the thin orchestration helper so route handlers stay thin.
+        Returns True on success.  GPIO errors are logged but not re-raised so
+        the poller stays running even on a GPIO-unavailable dev machine.
+        """
+        from collector import radio_gpio
+        radio = config.get_radio(radio_id)
+        if radio is None:
+            logger.error("reset_radio: unknown radio_id %s", radio_id)
+            return False
+
+        self.disconnect_reader(radio_id)
+        try:
+            radio_gpio.reset_radio(pin=radio.get("reset_gpio_pin"))
+        except Exception:
+            logger.exception("GPIO reset failed for radio %s", radio_id)
+
+        time.sleep(2)
+        self.reconnect_reader(radio_id)
+        return True
+
+    def bootloader_radio(self, radio_id: str) -> bool:
+        """Disconnect reader, pulse bootloader GPIO for the named radio.
+
+        Does NOT reconnect — the radio is in DFU mode and the serial port
+        won't be available until firmware is flashed and the radio reboots.
+        Returns True on success.
+        """
+        from collector import radio_gpio
+        radio = config.get_radio(radio_id)
+        if radio is None:
+            logger.error("bootloader_radio: unknown radio_id %s", radio_id)
+            return False
+
+        self.disconnect_reader(radio_id)
+        try:
+            radio_gpio.bootloader_mode(pin=radio.get("reset_gpio_pin"))
+        except Exception:
+            logger.exception("GPIO bootloader failed for radio %s", radio_id)
+        return True
+
     def _run(self):
         # Connect all readers with retry
         for reader in self.readers.values():

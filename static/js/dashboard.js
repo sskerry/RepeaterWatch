@@ -18,6 +18,13 @@
     // ── Dual-radio state ─────────────────────────────────
     var currentRadioId = 'a';
     var dualRadioMode = false;
+    var allRadios = [];  // filled from /api/v1/radios on boot
+
+    // Per-radio tools state
+    var toolsRadioId = 'a';         // active radio for Flash/Reset/Bootloader
+    var terminalRadioId = 'a';      // active radio for terminal serial mode
+    // USB relay state per radio (keyed by radio_id)
+    var usbEnabledByRadio = {};
 
     /**
      * Build a radio-scoped API URL.
@@ -29,6 +36,39 @@
             return '/api/v1/radios/' + currentRadioId + path;
         }
         return '/api/v1' + path;
+    }
+
+    /**
+     * Build a tools-scoped API URL (for the Tools tab radio selector).
+     * Uses toolsRadioId in dual mode so it's independent of the MeshCore tab.
+     */
+    function toolsRadioUrl(path) {
+        if (dualRadioMode) {
+            return '/api/v1/radios/' + toolsRadioId + path;
+        }
+        return '/api/v1' + path;
+    }
+
+    /**
+     * Render a row of small radio-picker buttons into `container`.
+     * Calls `onChange(radioId)` when the selection changes.
+     * Returns a function to read the current selection.
+     */
+    function buildRadioSelector(container, initialId, onChange) {
+        container.innerHTML = '';
+        allRadios.forEach(function (r) {
+            var btn = document.createElement('button');
+            btn.className = 'tool-radio-btn' + (r.id === initialId ? ' active' : '');
+            btn.setAttribute('data-radio-id', r.id);
+            btn.textContent = r.label || r.id.toUpperCase();
+            btn.addEventListener('click', function () {
+                container.querySelectorAll('.tool-radio-btn').forEach(function (b) {
+                    b.classList.toggle('active', b === btn);
+                });
+                onChange(r.id);
+            });
+            container.appendChild(btn);
+        });
     }
 
     var appSettings = {
@@ -345,6 +385,7 @@
      */
     function initRadioTabs(radioData) {
         dualRadioMode = radioData.dual_radio_mode && radioData.radios.length > 1;
+        allRadios = radioData.radios || [];
         if (!dualRadioMode) return;
 
         var container = document.getElementById('radio-tabs');
@@ -382,6 +423,133 @@
         });
 
         container.style.display = '';
+        // Now that dualRadioMode and allRadios are set, wire up the Tools UI
+        initToolsDualRadioUI();
+    }
+
+    /**
+     * Called once after dual-radio mode is confirmed.
+     * Wires up all the per-radio selectors in the Tools tab.
+     */
+    function initToolsDualRadioUI() {
+        if (!dualRadioMode) return;
+
+        // ── Flash Firmware radio selector ─────────────────
+        var fwSelector = document.getElementById('fw-radio-selector');
+        var fwBtns = document.getElementById('fw-radio-btns');
+        if (fwSelector && fwBtns) {
+            fwSelector.style.display = '';
+            buildRadioSelector(fwBtns, toolsRadioId, function (rid) {
+                toolsRadioId = rid;
+            });
+        }
+
+        // ── Radio Control radio selector ──────────────────
+        var ctrlSelector = document.getElementById('radio-ctrl-selector');
+        var ctrlBtns = document.getElementById('radio-ctrl-btns');
+        if (ctrlSelector && ctrlBtns) {
+            ctrlSelector.style.display = '';
+            buildRadioSelector(ctrlBtns, toolsRadioId, function (rid) {
+                toolsRadioId = rid;
+                // keep firmware selector in sync (they share toolsRadioId)
+                var fwBtnsEl = document.getElementById('fw-radio-btns');
+                if (fwBtnsEl) {
+                    fwBtnsEl.querySelectorAll('.tool-radio-btn').forEach(function (b) {
+                        b.classList.toggle('active', b.getAttribute('data-radio-id') === rid);
+                    });
+                }
+            });
+        }
+
+        // ── Radio USB dual UI ─────────────────────────────
+        var singleUi = document.getElementById('usb-single-ui');
+        var dualUi = document.getElementById('usb-dual-ui');
+        if (singleUi) singleUi.style.display = 'none';
+        if (dualUi) {
+            dualUi.style.display = '';
+            allRadios.forEach(function (r) {
+                var row = document.createElement('div');
+                row.className = 'usb-dual-row';
+
+                var lbl = document.createElement('span');
+                lbl.className = 'usb-dual-label';
+                lbl.textContent = (r.label || r.id.toUpperCase()) + ' USB:';
+
+                var btn = document.createElement('button');
+                btn.className = 'reboot-btn';
+                btn.setAttribute('data-usb-radio', r.id);
+                btn.textContent = 'Enable';
+
+                var statusEl = document.createElement('span');
+                statusEl.className = 'usb-dual-status';
+                statusEl.setAttribute('data-usb-status-radio', r.id);
+
+                row.appendChild(lbl);
+                row.appendChild(btn);
+                row.appendChild(statusEl);
+                dualUi.appendChild(row);
+
+                usbEnabledByRadio[r.id] = false;
+
+                // Fetch initial state
+                fetchJSON('/api/v1/radios/' + r.id + '/radio/usb').then(function (d) {
+                    usbEnabledByRadio[r.id] = d.enabled;
+                    btn.textContent = d.enabled ? 'Disable' : 'Enable';
+                    if (d.enabled) btn.classList.add('active-toggle');
+                }).catch(noop);
+
+                btn.addEventListener('click', function () {
+                    var newState = !usbEnabledByRadio[r.id];
+                    btn.disabled = true;
+                    btn.textContent = newState ? 'Enabling...' : 'Disabling...';
+
+                    fetch('/api/v1/radios/' + r.id + '/radio/usb', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF_TOKEN },
+                        body: JSON.stringify({ enabled: newState }),
+                    })
+                    .then(function (resp) { return resp.json().then(function (d) { return { ok: resp.ok, data: d }; }); })
+                    .then(function (resp) {
+                        btn.disabled = false;
+                        if (resp.ok) {
+                            usbEnabledByRadio[r.id] = newState;
+                            btn.textContent = newState ? 'Disable' : 'Enable';
+                            btn.classList.toggle('active-toggle', newState);
+                        } else {
+                            btn.textContent = usbEnabledByRadio[r.id] ? 'Disable' : 'Enable';
+                            statusEl.textContent = resp.data.error || 'Failed';
+                            setTimeout(function () { statusEl.textContent = ''; }, 3000);
+                        }
+                    })
+                    .catch(function () {
+                        btn.disabled = false;
+                        btn.textContent = usbEnabledByRadio[r.id] ? 'Disable' : 'Enable';
+                        statusEl.textContent = 'Network error';
+                        setTimeout(function () { statusEl.textContent = ''; }, 3000);
+                    });
+                });
+            });
+        }
+
+        // ── Terminal radio selector (serial mode only) ────
+        var termSelector = document.getElementById('terminal-radio-selector');
+        var termBtns = document.getElementById('terminal-radio-btns');
+        if (termSelector && termBtns) {
+            buildRadioSelector(termBtns, terminalRadioId, function (rid) {
+                terminalRadioId = rid;
+            });
+            // Show/hide depending on current terminal mode
+            _updateTerminalRadioSelector();
+        }
+    }
+
+    /** Show the terminal radio selector only when mode=serial and dualRadioMode */
+    function _updateTerminalRadioSelector() {
+        var sel = document.getElementById('terminal-radio-selector');
+        if (!sel) return;
+        var serialModeActive = document.querySelector('.terminal-mode-btn[data-mode="serial"]');
+        serialModeActive = serialModeActive && serialModeActive.classList.contains('active');
+        sel.style.display = (dualRadioMode && serialModeActive) ? '' : 'none';
     }
 
     function loadRadioInfo() {
@@ -812,7 +980,11 @@
             document.getElementById('fw-modal-footer').style.display = 'none';
             showFwStatus('flashing', 'Uploading...');
 
-            fetch('/api/v1/firmware/flash', { method: 'POST', body: formData, headers: { 'X-CSRFToken': CSRF_TOKEN } })
+            var flashUrl = dualRadioMode
+                ? '/api/v1/radios/' + toolsRadioId + '/firmware/flash'
+                : '/api/v1/firmware/flash';
+
+            fetch(flashUrl, { method: 'POST', body: formData, headers: { 'X-CSRFToken': CSRF_TOKEN } })
                 .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, data: d }; }); })
                 .then(function (resp) {
                     if (!resp.ok) {
@@ -840,8 +1012,19 @@
     var servicesTimer = null;
 
     function setupServices() {
-        document.querySelectorAll('.svc-btn').forEach(function (btn) {
-            btn.addEventListener('click', function () {
+        // In dual-radio mode, rebuild the service list with @a/@b suffixes.
+        // Then use event delegation so dynamically-rendered buttons are covered.
+        if (dualRadioMode) {
+            _buildDualServiceList();
+        }
+
+        // Event delegation on the container handles both static (single) and
+        // dynamic (dual) buttons without needing to re-attach per button.
+        var serviceList = document.getElementById('service-list');
+        if (serviceList) {
+            serviceList.addEventListener('click', function (e) {
+                var btn = e.target.closest('.svc-btn');
+                if (!btn) return;
                 var name = btn.getAttribute('data-service');
                 var action = btn.getAttribute('data-action');
                 var label = action.charAt(0).toUpperCase() + action.slice(1);
@@ -867,7 +1050,7 @@
                         }, 3000);
                     });
             });
-        });
+        }
 
         document.getElementById('reboot-pi-btn').addEventListener('click', function () {
             if (!confirm('Reboot the Raspberry Pi? All services will go down.')) return;
@@ -880,13 +1063,87 @@
         });
     }
 
+    /**
+     * Rebuild the service-list DOM with @a/@b names for dual mode.
+     * Called once on Tools-tab first activation when dualRadioMode is true.
+     */
+    function _buildDualServiceList() {
+        var container = document.getElementById('service-list');
+        if (!container) return;
+        container.innerHTML = '';
+
+        // In dual mode: mctomqtt@a, mctomqtt@b, SerialMux@a, SerialMux@b, RepeaterWatch
+        var services = [];
+        allRadios.forEach(function (r) {
+            services.push({ name: 'mctomqtt@' + r.id, canStop: true });
+            services.push({ name: 'SerialMux@' + r.id, canStop: true });
+        });
+        services.push({ name: 'RepeaterWatch', canStop: false });
+
+        services.forEach(function (svc) {
+            var row = document.createElement('div');
+            row.className = 'service-row';
+            row.setAttribute('data-service', svc.name);
+
+            var dot = document.createElement('span');
+            dot.className = 'service-dot';
+
+            var nameEl = document.createElement('span');
+            nameEl.className = 'service-name';
+            nameEl.textContent = svc.name;
+
+            var uptimeEl = document.createElement('span');
+            uptimeEl.className = 'service-uptime';
+            uptimeEl.textContent = '--';
+
+            var btns = document.createElement('div');
+            btns.className = 'service-btns';
+
+            var startBtn = document.createElement('button');
+            startBtn.className = 'svc-btn start-btn';
+            startBtn.setAttribute('data-service', svc.name);
+            startBtn.setAttribute('data-action', 'start');
+            startBtn.textContent = 'Start';
+
+            var restartBtn = document.createElement('button');
+            restartBtn.className = 'svc-btn restart-btn';
+            restartBtn.setAttribute('data-service', svc.name);
+            restartBtn.setAttribute('data-action', 'restart');
+            restartBtn.textContent = 'Restart';
+
+            btns.appendChild(startBtn);
+
+            if (svc.canStop) {
+                var stopBtn = document.createElement('button');
+                stopBtn.className = 'svc-btn stop-btn';
+                stopBtn.setAttribute('data-service', svc.name);
+                stopBtn.setAttribute('data-action', 'stop');
+                stopBtn.textContent = 'Stop';
+                btns.appendChild(stopBtn);
+            }
+
+            btns.appendChild(restartBtn);
+            row.appendChild(dot);
+            row.appendChild(nameEl);
+            row.appendChild(uptimeEl);
+            row.appendChild(btns);
+            container.appendChild(row);
+        });
+    }
+
     function setupRebootRadio() {
         document.getElementById('reboot-radio-btn').addEventListener('click', function () {
-            if (!confirm('Reset the radio? It will be unavailable for a few seconds.')) return;
+            var radioLabel = dualRadioMode
+                ? (allRadios.find(function(r){return r.id===toolsRadioId;})||{label:toolsRadioId}).label
+                : 'the radio';
+            if (!confirm('Reset ' + radioLabel + '? It will be unavailable for a few seconds.')) return;
             var btn = this;
             btn.disabled = true;
             btn.textContent = 'Resetting...';
-            fetch('/api/v1/radio/reset', { method: 'POST', headers: { 'X-CSRFToken': CSRF_TOKEN } })
+            var url = dualRadioMode
+                ? '/api/v1/radios/' + toolsRadioId + '/radio/reset'
+                : '/api/v1/radio/reset';
+            fetch(url, { method: 'POST', headers: { 'X-CSRFToken': CSRF_TOKEN } })
                 .then(function (r) { return r.json(); })
                 .then(function () {
                     btn.textContent = 'Reset sent';
@@ -899,11 +1156,17 @@
         });
 
         document.getElementById('bootloader-radio-btn').addEventListener('click', function () {
-            if (!confirm('Enter bootloader mode? The radio will stop working until firmware is flashed.')) return;
+            var radioLabel = dualRadioMode
+                ? (allRadios.find(function(r){return r.id===toolsRadioId;})||{label:toolsRadioId}).label
+                : 'the radio';
+            if (!confirm('Enter bootloader mode on ' + radioLabel + '? The radio will stop working until firmware is flashed.')) return;
             var btn = this;
             btn.disabled = true;
             btn.textContent = 'Entering bootloader...';
-            fetch('/api/v1/radio/bootloader', { method: 'POST', headers: { 'X-CSRFToken': CSRF_TOKEN } })
+            var url = dualRadioMode
+                ? '/api/v1/radios/' + toolsRadioId + '/radio/bootloader'
+                : '/api/v1/radio/bootloader';
+            fetch(url, { method: 'POST', headers: { 'X-CSRFToken': CSRF_TOKEN } })
                 .then(function (r) { return r.json(); })
                 .then(function () {
                     btn.textContent = 'Bootloader active';
@@ -916,6 +1179,10 @@
     }
 
     function setupUsbRelay() {
+        // Dual-radio mode: USB relay setup is handled in initToolsDualRadioUI.
+        // This function only runs the single-radio path.
+        if (dualRadioMode) return;
+
         var btn = document.getElementById('usb-relay-btn');
         var statusEl = document.getElementById('usb-relay-status');
         var deviceList = document.getElementById('usb-device-list');
@@ -1071,6 +1338,15 @@
     }
 
     function startServicesRefresh() {
+        // If dual-radio mode and service list hasn't been rebuilt yet, do so now.
+        // This handles the case where Tools tab is activated before loadRadioInfo finishes.
+        if (dualRadioMode && document.getElementById('service-list')) {
+            var firstRow = document.querySelector('.service-row[data-service="mctomqtt"]');
+            if (firstRow) {
+                // Static list is still showing — rebuild for dual mode
+                _buildDualServiceList();
+            }
+        }
         refreshServices();
         if (servicesTimer) clearInterval(servicesTimer);
         servicesTimer = setInterval(refreshServices, 30000);
@@ -1090,7 +1366,10 @@
     }
 
     function pollFwStatus() {
-        fetchJSON('/api/v1/firmware/status').then(function (d) {
+        var statusUrl = dualRadioMode
+            ? '/api/v1/radios/' + toolsRadioId + '/firmware/status'
+            : '/api/v1/firmware/status';
+        fetchJSON(statusUrl).then(function (d) {
             showFwStatus(d.state, d.progress);
             if (d.log && d.log.length > 0) {
                 showFwLog(d.log.join('\n'));
@@ -1128,7 +1407,7 @@
     var terminalConnected = false;
 
     function setupTerminal() {
-        var modeBtns = document.querySelectorAll('.terminal-mode-btn');
+        var modeBtns = document.querySelectorAll('.terminal-mode-btn[data-mode]');
         var connectBtn = document.getElementById('terminal-connect-btn');
 
         modeBtns.forEach(function (btn) {
@@ -1137,6 +1416,7 @@
                 modeBtns.forEach(function (b) { b.classList.remove('active'); });
                 btn.classList.add('active');
                 terminalMode = btn.getAttribute('data-mode');
+                _updateTerminalRadioSelector();
             });
         });
 
@@ -1185,7 +1465,14 @@
         terminalFitAddon.fit();
 
         var wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-        var wsPath = terminalMode === 'pty' ? '/ws/terminal/pty' : '/ws/terminal/serial';
+        var wsPath;
+        if (terminalMode === 'pty') {
+            wsPath = '/ws/terminal/pty';
+        } else if (dualRadioMode) {
+            wsPath = '/ws/terminal/serial/' + terminalRadioId;
+        } else {
+            wsPath = '/ws/terminal/serial';
+        }
         var wsUrl = wsProtocol + '//' + window.location.host + wsPath;
 
         terminalWs = new WebSocket(wsUrl);
@@ -1769,21 +2056,25 @@
     setupSensorTimeButtons();
     setupThemeToggle();
 
-    // Admin-only setup — elements only exist when authenticated
-    if (document.getElementById('map-fullscreen'))   setupMapFullscreen();
-    if (document.getElementById('fw-flash-btn'))     setupFirmwareFlash();
-    if (document.getElementById('reboot-radio-btn')) setupRebootRadio();
-    if (document.getElementById('usb-relay-btn'))    setupUsbRelay();
-    if (document.querySelector('.svc-btn'))          setupServices();
-    if (document.getElementById('bq24074-toggle-btn')) setupBq24074Tool();
+    // Admin-only setup — elements only exist when authenticated.
+    // Some (setupServices, setupUsbRelay) need dualRadioMode/allRadios from loadRadioInfo,
+    // so those are deferred into the Promise.all callback.
+    if (document.getElementById('map-fullscreen'))      setupMapFullscreen();
+    if (document.getElementById('fw-flash-btn'))        setupFirmwareFlash();
+    if (document.getElementById('reboot-radio-btn'))    setupRebootRadio();
+    if (document.getElementById('bq24074-toggle-btn'))  setupBq24074Tool();
     if (document.getElementById('terminal-connect-btn')) setupTerminal();
-    if (document.getElementById('settings-save-btn')) setupSettings();
+    if (document.getElementById('settings-save-btn'))   setupSettings();
 
     // Load radio config (tabs) and app settings in parallel, then do initial refresh
     Promise.all([
         loadSettings(),
         loadRadioInfo(),
     ]).then(function () {
+        // Services and USB relay setup require dualRadioMode/allRadios to be set first
+        if (document.getElementById('service-list'))    setupServices();
+        if (document.getElementById('usb-relay-btn') || document.getElementById('usb-dual-ui'))
+            setupUsbRelay();
         refreshAll();
     });
 

@@ -31,7 +31,17 @@ def _has_full_access():
     # No password configured — everything is open
     return not (os.environ.get("MESHCORE_PASSWORD_HASH") or os.environ.get("MESHCORE_PASSWORD"))
 
-MANAGED_SERVICES = ["mctomqtt", "SerialMux", "RepeaterWatch"]
+MANAGED_SERVICES_SINGLE = ["mctomqtt", "SerialMux", "RepeaterWatch"]
+MANAGED_SERVICES_DUAL   = ["mctomqtt@a", "mctomqtt@b", "SerialMux@a", "SerialMux@b", "RepeaterWatch"]
+
+
+def _managed_services():
+    """Return the correct managed service list for the current radio mode."""
+    return MANAGED_SERVICES_DUAL if config.DUAL_RADIO_MODE else MANAGED_SERVICES_SINGLE
+
+
+# Keep the old name as an alias so any code that imports it directly still works.
+MANAGED_SERVICES = MANAGED_SERVICES_SINGLE
 
 api = Blueprint("api", __name__, url_prefix="/api/v1")
 
@@ -666,12 +676,12 @@ def _get_service_info(name):
 
 @api.route("/services")
 def list_services():
-    return jsonify([_get_service_info(s) for s in MANAGED_SERVICES])
+    return jsonify([_get_service_info(s) for s in _managed_services()])
 
 
 @api.route("/services/<name>/start", methods=["POST"])
 def start_service(name):
-    if name not in MANAGED_SERVICES:
+    if name not in _managed_services():
         return jsonify({"error": "Unknown service"}), 400
 
     def do_start():
@@ -683,7 +693,7 @@ def start_service(name):
 
 @api.route("/services/<name>/stop", methods=["POST"])
 def stop_service(name):
-    if name not in MANAGED_SERVICES:
+    if name not in _managed_services():
         return jsonify({"error": "Unknown service"}), 400
     if name == "RepeaterWatch":
         return jsonify({"error": "Cannot stop RepeaterWatch"}), 400
@@ -697,7 +707,7 @@ def stop_service(name):
 
 @api.route("/services/<name>/restart", methods=["POST"])
 def restart_service(name):
-    if name not in MANAGED_SERVICES:
+    if name not in _managed_services():
         return jsonify({"error": "Unknown service"}), 400
 
     def do_restart():
@@ -1103,34 +1113,68 @@ def auth_update_settings():
 
 # ── Radio / GPIO ──────────────────────────────────────────
 
+def _do_radio_reset(radio_id: str, poller):
+    """Disconnect the named reader, pulse reset, sleep, reconnect."""
+    if poller:
+        poller.reset_radio(radio_id)
+    else:
+        # No poller — fall back to bare GPIO (dev env)
+        radio = config.get_radio(radio_id)
+        if radio:
+            try:
+                radio_gpio.reset_radio(pin=radio.get("reset_gpio_pin"))
+            except Exception:
+                pass
+
+
+def _do_radio_bootloader(radio_id: str, poller):
+    """Disconnect the named reader, pulse bootloader, do NOT reconnect."""
+    if poller:
+        poller.bootloader_radio(radio_id)
+    else:
+        radio = config.get_radio(radio_id)
+        if radio:
+            try:
+                radio_gpio.bootloader_mode(pin=radio.get("reset_gpio_pin"))
+            except Exception:
+                pass
+
+
+@api.route("/radios/<radio_id>/radio/reset", methods=["POST"])
+def radio_reset_per_radio(radio_id: str):
+    """Per-radio reset: only disconnects/reconnects the named reader."""
+    radio, err = _validate_radio_id(radio_id)
+    if err:
+        return err
+    poller = current_app.config.get("poller")
+    threading.Thread(target=_do_radio_reset, args=(radio_id, poller), daemon=True).start()
+    return jsonify({"status": "ok"})
+
+
+@api.route("/radios/<radio_id>/radio/bootloader", methods=["POST"])
+def radio_bootloader_per_radio(radio_id: str):
+    """Per-radio bootloader: disconnects only the named reader, pulses DFU pins."""
+    radio, err = _validate_radio_id(radio_id)
+    if err:
+        return err
+    poller = current_app.config.get("poller")
+    threading.Thread(target=_do_radio_bootloader, args=(radio_id, poller), daemon=True).start()
+    return jsonify({"status": "ok"})
+
+
 @api.route("/radio/reset", methods=["POST"])
 def radio_reset():
+    """Legacy single-radio reset — delegates to radio 'a' handler."""
     poller = current_app.config.get("poller")
-
-    def do_reset():
-        try:
-            if poller:
-                poller.stop()
-            radio_gpio.reset_radio()
-            time.sleep(2)  # wait for radio to boot
-        finally:
-            if poller:
-                poller.start()
-
-    threading.Thread(target=do_reset, daemon=True).start()
+    threading.Thread(target=_do_radio_reset, args=('a', poller), daemon=True).start()
     return jsonify({"status": "ok"})
 
 
 @api.route("/radio/bootloader", methods=["POST"])
 def radio_bootloader():
+    """Legacy single-radio bootloader — delegates to radio 'a' handler."""
     poller = current_app.config.get("poller")
-
-    def do_bootloader():
-        if poller:
-            poller.stop()
-        radio_gpio.bootloader_mode()
-
-    threading.Thread(target=do_bootloader, daemon=True).start()
+    threading.Thread(target=_do_radio_bootloader, args=('a', poller), daemon=True).start()
     return jsonify({"status": "ok"})
 
 
@@ -1150,6 +1194,7 @@ def _device_info(name):
 
 @api.route("/neighbors/purge", methods=["POST"])
 def neighbors_purge():
+    """Purge old neighbors across ALL radios (legacy cross-radio endpoint)."""
     data = request.get_json(force=True)
     hours = data.get("hours")
     if not isinstance(hours, (int, float)) or hours <= 0:
@@ -1160,8 +1205,35 @@ def neighbors_purge():
 
 @api.route("/neighbors/delete", methods=["POST"])
 def neighbors_delete():
+    """Delete ALL neighbors across ALL radios (legacy cross-radio endpoint)."""
     conn = models._conn()
     conn.execute("DELETE FROM neighbors")
+    conn.commit()
+    return jsonify({"status": "ok"})
+
+
+@api.route("/radios/<radio_id>/neighbors/purge", methods=["POST"])
+def radio_neighbors_purge(radio_id: str):
+    """Purge old neighbors for a specific radio."""
+    _, err = _validate_radio_id(radio_id)
+    if err:
+        return err
+    data = request.get_json(force=True)
+    hours = data.get("hours")
+    if not isinstance(hours, (int, float)) or hours <= 0:
+        return jsonify({"error": "hours must be a positive number"}), 400
+    count = models.delete_old_neighbors(int(hours), radio_id=radio_id)
+    return jsonify({"status": "ok", "deleted": count})
+
+
+@api.route("/radios/<radio_id>/neighbors/delete", methods=["POST"])
+def radio_neighbors_delete(radio_id: str):
+    """Delete ALL neighbors for a specific radio."""
+    _, err = _validate_radio_id(radio_id)
+    if err:
+        return err
+    conn = models._conn()
+    conn.execute("DELETE FROM neighbors WHERE radio_id = ?", (radio_id,))
     conn.commit()
     return jsonify({"status": "ok"})
 
@@ -1177,9 +1249,8 @@ def database_reset():
     return jsonify({"status": "ok"})
 
 
-@api.route("/radio/usb")
-def radio_usb_status():
-    pin = config.USB_RELAY_GPIO_PIN
+def _usb_relay_get(pin: int):
+    """Return the enabled state of the USB relay on the given GPIO pin."""
     try:
         result = subprocess.run(
             ["pinctrl", "get", str(pin)],
@@ -1193,11 +1264,10 @@ def radio_usb_status():
         return jsonify({"enabled": False, "error": "Failed to read relay status"})
 
 
-@api.route("/radio/usb", methods=["POST"])
-def radio_usb_toggle():
+def _usb_relay_post(pin: int):
+    """Toggle the USB relay on the given GPIO pin."""
     data = request.get_json(force=True)
     enable = data.get("enabled", True)
-    pin = config.USB_RELAY_GPIO_PIN
     level = "dh" if enable else "dl"
 
     before = _list_serial_by_id()
@@ -1223,3 +1293,39 @@ def radio_usb_toggle():
                 break
 
     return jsonify({"status": "ok", "enabled": enable, "device": device})
+
+
+@api.route("/radios/<radio_id>/radio/usb")
+def radio_usb_status_per_radio(radio_id: str):
+    """Per-radio USB relay status."""
+    radio, err = _validate_radio_id(radio_id)
+    if err:
+        return err
+    pin = radio.get("usb_relay_gpio_pin")
+    if pin is None:
+        return jsonify({"enabled": False, "error": "No USB relay GPIO configured for this radio"})
+    return _usb_relay_get(pin)
+
+
+@api.route("/radios/<radio_id>/radio/usb", methods=["POST"])
+def radio_usb_toggle_per_radio(radio_id: str):
+    """Per-radio USB relay toggle."""
+    radio, err = _validate_radio_id(radio_id)
+    if err:
+        return err
+    pin = radio.get("usb_relay_gpio_pin")
+    if pin is None:
+        return jsonify({"error": "No USB relay GPIO configured for this radio"}), 400
+    return _usb_relay_post(pin)
+
+
+@api.route("/radio/usb")
+def radio_usb_status():
+    """Legacy single-radio USB relay status — delegates to radio 'a'."""
+    return _usb_relay_get(config.USB_RELAY_GPIO_PIN)
+
+
+@api.route("/radio/usb", methods=["POST"])
+def radio_usb_toggle():
+    """Legacy single-radio USB relay toggle — delegates to radio 'a'."""
+    return _usb_relay_post(config.USB_RELAY_GPIO_PIN)

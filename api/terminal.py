@@ -13,6 +13,23 @@ import config
 logger = logging.getLogger(__name__)
 
 
+def _open_serial_for_radio(radio_id: str):
+    """Return (serial.Serial, error_str) for the named radio's terminal port.
+
+    error_str is None on success.
+    """
+    radio = config.get_radio(radio_id)
+    if radio is None:
+        return None, f"Unknown radio: {radio_id!r}"
+    port = radio.get("terminal_serial_port", "")
+    baud = radio.get("terminal_serial_baud", config.TERMINAL_SERIAL_BAUD)
+    try:
+        ser = serial.Serial(port=port, baudrate=baud, timeout=0)
+        return ser, None
+    except Exception as e:
+        return None, f"Error opening {port}: {e}"
+
+
 def register_terminal_routes(sock):
 
     @sock.route("/ws/terminal/pty")
@@ -65,18 +82,8 @@ def register_terminal_routes(sock):
                 pass
             reader_thread.join(timeout=2)
 
-    @sock.route("/ws/terminal/serial")
-    def terminal_serial(ws):
-        try:
-            ser = serial.Serial(
-                port=config.TERMINAL_SERIAL_PORT,
-                baudrate=config.TERMINAL_SERIAL_BAUD,
-                timeout=0,
-            )
-        except Exception as e:
-            ws.send(f"\r\nError opening {config.TERMINAL_SERIAL_PORT}: {e}\r\n")
-            return
-
+    def _run_serial_ws(ws, ser):
+        """Run the serial-bridge loop for an already-opened serial port."""
         stop = threading.Event()
 
         def reader():
@@ -111,3 +118,26 @@ def register_terminal_routes(sock):
             except Exception:
                 pass
             reader_thread.join(timeout=2)
+
+    @sock.route("/ws/terminal/serial")
+    def terminal_serial(ws):
+        """Legacy single-radio serial terminal — uses radio 'a' port."""
+        try:
+            ser = serial.Serial(
+                port=config.TERMINAL_SERIAL_PORT,
+                baudrate=config.TERMINAL_SERIAL_BAUD,
+                timeout=0,
+            )
+        except Exception as e:
+            ws.send(f"\r\nError opening {config.TERMINAL_SERIAL_PORT}: {e}\r\n")
+            return
+        _run_serial_ws(ws, ser)
+
+    @sock.route("/ws/terminal/serial/<radio_id>")
+    def terminal_serial_radio(ws, radio_id):
+        """Per-radio serial terminal — opens the named radio's terminal port."""
+        ser, err = _open_serial_for_radio(radio_id)
+        if err:
+            ws.send(f"\r\n{err}\r\n")
+            return
+        _run_serial_ws(ws, ser)

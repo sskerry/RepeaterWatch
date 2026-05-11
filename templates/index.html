@@ -645,6 +645,11 @@
                     <h3>Flash Firmware</h3>
                 </div>
                 <p class="tool-desc">Upload a firmware .zip to flash the repeater. Services will restart automatically.</p>
+                <!-- dual-radio target selector — hidden in single-radio mode via JS -->
+                <div id="fw-radio-selector" class="tool-radio-selector" style="display:none;">
+                    <label class="tool-radio-label">Target radio:</label>
+                    <div class="tool-radio-btns" id="fw-radio-btns"></div>
+                </div>
                 <div class="firmware-inputs">
                     <label class="firmware-file-label">
                         <span id="fw-file-name">Choose firmware .zip</span>
@@ -655,13 +660,14 @@
                 </div>
             </div>
 
-            <!-- Services -->
+            <!-- Services — populated dynamically in dual mode -->
             <div class="tool-card tool-card-wide">
                 <div class="tool-card-header">
                     <span class="tool-icon">&#x2699;</span>
                     <h3>Services</h3>
                 </div>
                 <div class="service-list" id="service-list">
+                    <!-- Populated by JS: static in single-radio mode, dynamic in dual mode -->
                     <div class="service-row" data-service="mctomqtt">
                         <span class="service-dot"></span>
                         <span class="service-name">mctomqtt</span>
@@ -700,23 +706,31 @@
                     <h3>Radio Control</h3>
                 </div>
                 <p class="tool-desc">Hardware reset the radio via GPIO, or enter bootloader mode for firmware updates.</p>
+                <!-- dual-radio target selector — hidden in single-radio mode via JS -->
+                <div id="radio-ctrl-selector" class="tool-radio-selector" style="display:none;">
+                    <label class="tool-radio-label">Target radio:</label>
+                    <div class="tool-radio-btns" id="radio-ctrl-btns"></div>
+                </div>
                 <div class="card-actions">
                     <button id="reboot-radio-btn"      class="reboot-btn">Reset Radio</button>
                     <button id="bootloader-radio-btn"  class="reboot-btn bootloader-btn">Bootloader Mode</button>
                 </div>
             </div>
 
-            <!-- Radio USB -->
+            <!-- Radio USB — in dual mode, one toggle per radio is rendered by JS -->
             <div class="tool-card tool-card-radio-usb">
                 <div class="tool-card-header">
                     <span class="tool-icon">&#x1F50C;</span>
                     <h3>Radio USB</h3>
                 </div>
                 <p class="tool-desc">Toggle the USB power relay to the radio.</p>
-                <div class="card-actions">
+                <!-- Single-radio UI (hidden in dual mode by JS) -->
+                <div id="usb-single-ui" class="card-actions">
                     <button id="usb-relay-btn" class="reboot-btn">Enable Radio USB</button>
                     <span id="usb-relay-status" class="settings-save-status"></span>
                 </div>
+                <!-- Dual-radio UI (hidden in single mode, populated by JS) -->
+                <div id="usb-dual-ui" style="display:none;"></div>
                 <div id="usb-device-list" class="usb-device-list" style="display:none;"></div>
             </div>
 
@@ -766,6 +780,11 @@
                     <div class="terminal-mode-selector">
                         <button class="terminal-mode-btn active" data-mode="pty">Pi Console</button>
                         <button class="terminal-mode-btn" data-mode="serial">Repeater CLI</button>
+                    </div>
+                    <!-- dual-radio selector for Repeater CLI mode — hidden in single-radio / pty mode -->
+                    <div id="terminal-radio-selector" class="tool-radio-selector" style="display:none;">
+                        <label class="tool-radio-label">Radio:</label>
+                        <div class="tool-radio-btns" id="terminal-radio-btns"></div>
                     </div>
                     <button id="terminal-connect-btn" class="terminal-connect-btn">Connect</button>
                 </div>
