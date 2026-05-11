@@ -422,6 +422,26 @@ def _radio_listing_entry(radio: dict, poller_radios: dict) -> dict:
     """Build a single entry for the /radios listing from a config dict and live status."""
     rid = radio["id"]
     live = poller_radios.get(rid, {})
+
+    # Port-stability (L2.2)
+    ps_map = current_app.config.get("port_stability", {})
+    ps = ps_map.get(rid, {
+        "flash_serial_port_stable": True,
+        "terminal_serial_port_stable": True,
+        "stable": True,
+    })
+    flash_stable = ps.get("flash_serial_port_stable", True)
+    terminal_stable = ps.get("terminal_serial_port_stable", True)
+    port_stable = flash_stable and terminal_stable
+
+    # Identity status (L3.4)
+    poller = current_app.config.get("poller")
+    id_status = poller.get_identity_status(rid) if poller else {
+        "status": "unknown", "live_pubkey": None, "claimed_pubkey": None
+    }
+    live_pk = id_status.get("live_pubkey") or ""
+    claimed_pk = id_status.get("claimed_pubkey") or ""
+
     entry = {
         "id": rid,
         "label": radio.get("label", "Radio"),
@@ -429,9 +449,20 @@ def _radio_listing_entry(radio: dict, poller_radios: dict) -> dict:
         "connected": live.get("serial_connected", False),
         "last_poll": live.get("last_poll", 0),
         "poll_count": live.get("poll_count", 0),
+        # Port stability (visible to all callers)
+        "port_stable": port_stable,
+        # Identity status (visible to all callers)
+        "identity_status": id_status.get("status", "unknown"),
+        "claimed_pubkey_prefix": claimed_pk[:4].upper() if claimed_pk else None,
+        "live_pubkey_prefix": live_pk[:4].upper() if live_pk else None,
     }
     if _has_full_access():
         entry["serial_port"] = radio.get("serial_port", "")
+        # Detailed port-stability breakdown (admin only)
+        entry["port_stable_detail"] = {
+            "flash_serial_port": flash_stable,
+            "terminal_serial_port": terminal_stable,
+        }
     return entry
 
 
@@ -528,6 +559,25 @@ def radio_neighbors_history(radio_id: str):
     if err:
         return err
     return jsonify(_neighbors_history_payload(radio_id, _hours()))
+
+
+@api.route("/radios/<radio_id>/identity/reclaim", methods=["POST"])
+def radio_identity_reclaim(radio_id: str):
+    """Overwrite the stored claimed_pubkey with the current live public_key.
+
+    Auth-gated — requires full access (logged in, or no password set).
+    Returns 409 if the radio has not yet been polled (no live pubkey available).
+    """
+    _, err = _validate_radio_id(radio_id)
+    if err:
+        return err
+    if not _has_full_access():
+        return jsonify({"error": "Authentication required"}), 401
+    poller = current_app.config.get("poller")
+    ok = poller.reclaim_identity(radio_id) if poller else False
+    if not ok:
+        return jsonify({"error": "Could not reclaim — radio not yet polled"}), 409
+    return jsonify({"status": "ok"})
 
 
 @api.route("/radios/<radio_id>/firmware/flash", methods=["POST"])

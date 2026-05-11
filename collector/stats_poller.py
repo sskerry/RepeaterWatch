@@ -18,7 +18,7 @@ from database.retention import purge_old_data
 from database.schema import init_db
 from collector.packet_parser import parse_info_line, decode_advert
 from collector.serial_reader import SerialReader
-from collector.startup import collect_device_info
+from collector.startup import collect_device_info, claim_or_verify_identity
 
 logger = logging.getLogger(__name__)
 
@@ -41,6 +41,8 @@ class StatsPoller:
         self._last_poll: dict[str, float] = {rid: 0 for rid in self.readers}
         self._poll_count: dict[str, int] = {rid: 0 for rid in self.readers}
         self._error_count: dict[str, int] = {rid: 0 for rid in self.readers}
+        # Per-radio identity status (populated after first collect_device_info run)
+        self.identity_status: dict[str, dict] = {}
 
     @property
     def status(self) -> dict:
@@ -152,6 +154,39 @@ class StatsPoller:
             logger.exception("GPIO bootloader failed for radio %s", radio_id)
         return True
 
+    def get_identity_status(self, radio_id: str) -> dict:
+        """Return the most recent identity-check result for radio_id.
+
+        Returns an 'unknown' sentinel dict if the radio has not yet been
+        through a collect_device_info + claim_or_verify_identity cycle.
+        """
+        return self.identity_status.get(
+            radio_id,
+            {"status": "unknown", "live_pubkey": None, "claimed_pubkey": None},
+        )
+
+    def reclaim_identity(self, radio_id: str) -> bool:
+        """Overwrite the stored claimed_pubkey with the current live public_key.
+
+        Called by the /identity/reclaim API endpoint when the operator confirms
+        a radio swap was intentional.  Returns False if no live pubkey is
+        available (radio not yet polled).
+        """
+        live_pubkey = models.get_device_info(radio_id=radio_id).get("public_key") or ""
+        if not live_pubkey:
+            return False
+        models.set_device_info("claimed_pubkey", live_pubkey, radio_id=radio_id)
+        self.identity_status[radio_id] = {
+            "status": "verified",
+            "live_pubkey": live_pubkey,
+            "claimed_pubkey": live_pubkey,
+        }
+        logger.info(
+            "Radio %s: identity reclaimed — new claimed_pubkey prefix %s.",
+            radio_id, live_pubkey[:4].upper(),
+        )
+        return True
+
     def _run(self):
         # Connect all readers with retry
         for reader in self.readers.values():
@@ -163,6 +198,8 @@ class StatsPoller:
                 time.sleep(2)
                 reader.read_background_lines()
                 collect_device_info(reader, radio_id=rid)
+                # Identity claim/verify runs immediately after device info is stored (L3.3)
+                self.identity_status[rid] = claim_or_verify_identity(rid)
 
         while not self._stop_event.is_set():
             ts = models.aligned_ts()

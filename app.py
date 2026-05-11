@@ -27,6 +27,65 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
+# ── Port-stability registry (populated once at startup) ──────────
+# Keyed by radio_id → {"flash_serial_port_stable": bool,
+#                      "terminal_serial_port_stable": bool,
+#                      "stable": bool}
+_port_stability: dict = {}
+
+
+def get_port_stability(radio_id: str) -> dict:
+    """Return the port-stability record for a radio_id, or a fully-stable
+    sentinel if the radio is unknown (so callers always get a usable dict)."""
+    return _port_stability.get(
+        radio_id,
+        {"flash_serial_port_stable": True, "terminal_serial_port_stable": True, "stable": True},
+    )
+
+
+def _validate_port_stability() -> None:
+    """Check each radio's flash_serial_port and terminal_serial_port.
+
+    If either value is non-empty and does NOT start with /dev/serial/by-id/,
+    log an ERROR-level message and record the radio as unstable.  The
+    virtual serial_port (ttyV0*) is intentionally excluded — it is NOT a
+    by-id path and that is correct.
+    """
+    global _port_stability
+    for radio in config.RADIOS:
+        rid = radio["id"]
+        flash_ok = True
+        terminal_ok = True
+
+        flash_port = radio.get("flash_serial_port", "")
+        if flash_port and not flash_port.startswith("/dev/serial/by-id/"):
+            flash_ok = False
+            logger.error(
+                "Radio %s: flash_serial_port = %r uses an UNSTABLE kernel-assigned path. "
+                "USB enumeration order can swap this across reboots, causing the wrong "
+                "physical radio to be targeted. Use /dev/serial/by-id/... instead.",
+                rid, flash_port,
+            )
+
+        terminal_port = radio.get("terminal_serial_port", "")
+        if terminal_port and not terminal_port.startswith("/dev/serial/by-id/"):
+            # ttyV* virtual ports are intentionally not by-id — only flag real device paths
+            if not terminal_port.startswith("/dev/ttyV"):
+                terminal_ok = False
+                logger.error(
+                    "Radio %s: terminal_serial_port = %r uses an UNSTABLE kernel-assigned path. "
+                    "USB enumeration order can swap this across reboots, causing the wrong "
+                    "physical radio to be targeted. Use /dev/serial/by-id/... instead.",
+                    rid, terminal_port,
+                )
+
+        _port_stability[rid] = {
+            "flash_serial_port_stable": flash_ok,
+            "terminal_serial_port_stable": terminal_ok,
+            "stable": flash_ok and terminal_ok,
+        }
+
+
 # ── Fail2ban: track failed login attempts by IP ──────────
 _login_attempts = {}   # ip -> [timestamp, timestamp, ...]
 _login_lock = threading.Lock()
@@ -104,6 +163,11 @@ def create_app() -> Flask:
     # Initialize database
     init_db(config.DB_PATH)
     models.init(config.DB_PATH)
+
+    # Validate port-path stability for all configured radios (L2.1)
+    _validate_port_stability()
+    # Make the stability map available to route handlers via current_app.config
+    app.config["port_stability"] = _port_stability
 
     # Register API blueprint
     app.register_blueprint(api)

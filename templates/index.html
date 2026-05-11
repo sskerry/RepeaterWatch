@@ -50,6 +50,16 @@
         {% endif %}
     </nav>
 
+    <!-- Identity mismatch banner — populated by JS when any radio reports mismatch (L3.6) -->
+    <div id="identity-mismatch-banner" class="identity-banner" style="display:none;" role="alert">
+        <!-- contents injected by JS -->
+    </div>
+
+    <!-- Identity claimed toast — populated by JS on first-boot claim (L3.6) -->
+    <div id="identity-claimed-toast" class="identity-toast" style="display:none;" role="status">
+        <!-- contents injected by JS -->
+    </div>
+
     <!-- ══════════════════════════════════════════
          Tab: MeshCore
     ══════════════════════════════════════════ -->

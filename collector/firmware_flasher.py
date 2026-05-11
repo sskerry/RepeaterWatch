@@ -100,6 +100,27 @@ def _flash_worker(fw_path: str, expected_hash: str, poller,
     reset_gpio_pin = radio["reset_gpio_pin"]
     usb_relay_gpio_pin = radio["usb_relay_gpio_pin"]
 
+    # Identity-mismatch gate (L3.5) — block flash if the radio's identity has
+    # not been confirmed.  A flash to the wrong physical hardware is
+    # catastrophic; the operator must reclaim the identity first.
+    if poller is not None:
+        id_status = poller.get_identity_status(radio_id)
+        if id_status.get("status") == "mismatch":
+            _reset_state()
+            with _lock:
+                _state["radio_id"] = radio_id
+            _set_state("error", "Identity mismatch — flash blocked")
+            _append_log(
+                f"ERROR: Radio {radio_id} identity mismatch — refusing to flash. "
+                "Reclaim the radio first via Settings."
+            )
+            logger.error(
+                "Radio %s identity mismatch — refusing to flash. "
+                "Reclaim the radio first via Settings.",
+                radio_id,
+            )
+            return
+
     _reset_state()
     with _lock:
         _state["radio_id"] = radio_id

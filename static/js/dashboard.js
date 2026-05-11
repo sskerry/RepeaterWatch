@@ -386,6 +386,26 @@
     function initRadioTabs(radioData) {
         dualRadioMode = radioData.dual_radio_mode && radioData.radios.length > 1;
         allRadios = radioData.radios || [];
+
+        // Single-radio port-stability badge (L2.3)
+        if (!dualRadioMode && allRadios.length > 0) {
+            var singleRadio = allRadios[0];
+            var existingBadge = document.getElementById('port-stability-badge');
+            if (existingBadge) existingBadge.parentNode.removeChild(existingBadge);
+            if (singleRadio.port_stable === false) {
+                var statusDot = document.getElementById('status-dot');
+                if (statusDot && statusDot.parentNode) {
+                    var badge = document.createElement('span');
+                    badge.id = 'port-stability-badge';
+                    badge.className = 'port-stability-warning';
+                    badge.title = 'Unstable hardware path — see PROVISIONING.md Phase 10a.';
+                    badge.textContent = '⚠️';
+                    statusDot.parentNode.appendChild(badge);
+                }
+            }
+            return;
+        }
+
         if (!dualRadioMode) return;
 
         var container = document.getElementById('radio-tabs');
@@ -398,14 +418,31 @@
             var btn = document.createElement('button');
             btn.className = 'radio-tab-btn' + (radio.id === currentRadioId ? ' radio-tab-active' : '');
             btn.setAttribute('data-radio-id', radio.id);
-            btn.textContent = radio.label || radio.id.toUpperCase();
+            var label = radio.label || radio.id.toUpperCase();
 
-            // Build title/aria with extra info
-            var titleParts = [radio.label || radio.id];
-            if (radio.iata) titleParts.push('IATA: ' + radio.iata);
-            if (radio.serial_port) titleParts.push(radio.serial_port);
-            btn.title = titleParts.join(' | ');
-            btn.setAttribute('aria-label', titleParts.join(', '));
+            // Port-stability warning on tab label (L2.3)
+            if (radio.port_stable === false) {
+                label = label + ' ⚠️';
+                btn.title = (radio.label || radio.id) +
+                    ' | Unstable hardware path — see PROVISIONING.md Phase 10a.';
+            }
+            btn.textContent = label;
+
+            // Build title/aria with extra info (only if we didn't already set an override)
+            if (radio.port_stable !== false) {
+                var titleParts = [radio.label || radio.id];
+                if (radio.iata) titleParts.push('IATA: ' + radio.iata);
+                if (radio.serial_port) titleParts.push(radio.serial_port);
+                btn.title = titleParts.join(' | ');
+                btn.setAttribute('aria-label', titleParts.join(', '));
+            } else {
+                var titlePartsUnstable = [radio.label || radio.id];
+                if (radio.iata) titlePartsUnstable.push('IATA: ' + radio.iata);
+                if (radio.serial_port) titlePartsUnstable.push(radio.serial_port);
+                titlePartsUnstable.push('Unstable hardware path — see PROVISIONING.md Phase 10a.');
+                btn.title = titlePartsUnstable.join(' | ');
+                btn.setAttribute('aria-label', titlePartsUnstable.join(', '));
+            }
 
             btn.addEventListener('click', function () {
                 if (radio.id === currentRadioId) return;
@@ -552,9 +589,136 @@
         sel.style.display = (dualRadioMode && serialModeActive) ? '' : 'none';
     }
 
+    // ── Identity banner / toast (L3.6) ───────────────────
+
+    /**
+     * Render or hide the identity-mismatch banner and the first-boot claimed toast.
+     * Called every time /api/v1/radios is fetched (boot + refresh).
+     */
+    function renderIdentityBanner(radioData) {
+        var radios = radioData.radios || [];
+        var banner = document.getElementById('identity-mismatch-banner');
+        var toast = document.getElementById('identity-claimed-toast');
+        if (!banner || !toast) return;
+
+        // ── Mismatch banner ──────────────────────────────
+        var mismatched = radios.filter(function (r) { return r.identity_status === 'mismatch'; });
+        if (mismatched.length === 0) {
+            banner.style.display = 'none';
+            // Clear old content so it doesn't flash stale data if it reappears
+            while (banner.firstChild) banner.removeChild(banner.firstChild);
+        } else {
+            while (banner.firstChild) banner.removeChild(banner.firstChild);
+
+            var icon = document.createElement('span');
+            icon.className = 'identity-banner-icon';
+            icon.textContent = '⚠️';
+            banner.appendChild(icon);
+
+            var msg = document.createElement('span');
+            msg.className = 'identity-banner-msg';
+            mismatched.forEach(function (r) {
+                var line = document.createElement('span');
+                var labelText = r.label || r.id.toUpperCase();
+                var claimedText = r.claimed_pubkey_prefix ? r.claimed_pubkey_prefix + '…' : '?';
+                var liveText = r.live_pubkey_prefix ? r.live_pubkey_prefix + '…' : '?';
+                line.textContent = labelText + ' — claimed ' + claimedText +
+                    ', live ' + liveText + '. Was this radio replaced or rewired? ';
+                msg.appendChild(line);
+
+                var btn = document.createElement('button');
+                btn.className = 'identity-banner-btn';
+                btn.textContent = 'Reclaim ' + labelText;
+                (function (radioId, buttonEl, lineEl) {
+                    buttonEl.addEventListener('click', function () {
+                        buttonEl.disabled = true;
+                        fetchJSON('/api/v1/radios/' + radioId + '/identity/reclaim', {
+                            method: 'POST',
+                        }).then(function () {
+                            // Refresh radios to update banner state
+                            return fetchJSON('/api/v1/radios');
+                        }).then(function (freshData) {
+                            initRadioTabs(freshData);
+                            renderIdentityBanner(freshData);
+                        }).catch(function (err) {
+                            var errSpan = document.createElement('span');
+                            errSpan.className = 'identity-banner-err';
+                            errSpan.textContent = ' Reclaim failed: ' + err.message;
+                            lineEl.appendChild(errSpan);
+                            buttonEl.disabled = false;
+                        });
+                    });
+                }(r.id, btn, line));
+
+                line.appendChild(btn);
+                line.appendChild(document.createTextNode(' '));
+            });
+
+            var help = document.createElement('a');
+            help.className = 'identity-banner-btn';
+            help.href = '#';
+            help.title = 'See PROVISIONING.md Phase 10a';
+            help.textContent = 'Help';
+            msg.appendChild(help);
+
+            banner.appendChild(msg);
+            banner.style.display = '';
+        }
+
+        // ── First-boot claimed toast ─────────────────────
+        var claimedRadios = radios.filter(function (r) { return r.identity_status === 'claimed'; });
+        // Use sessionStorage to only show each claimed radio once per session
+        var seenKey = 'rw-identity-claimed-seen';
+        var seen = {};
+        try { seen = JSON.parse(sessionStorage.getItem(seenKey) || '{}'); } catch (e) { seen = {}; }
+
+        var newlyClaimed = claimedRadios.filter(function (r) { return !seen[r.id]; });
+
+        if (newlyClaimed.length === 0) {
+            toast.style.display = 'none';
+            while (toast.firstChild) toast.removeChild(toast.firstChild);
+        } else {
+            while (toast.firstChild) toast.removeChild(toast.firstChild);
+
+            newlyClaimed.forEach(function (r) {
+                var pill = document.createElement('span');
+                pill.className = 'identity-toast-pill';
+
+                var pillText = document.createElement('span');
+                var labelText = r.label || r.id.toUpperCase();
+                var liveText = r.live_pubkey_prefix ? r.live_pubkey_prefix + '…' : '?';
+                pillText.textContent = labelText + ' identity claimed: ' + liveText +
+                    '. If this isn\'t the intended radio, go to Settings → Dual-Radio to re-allocate.';
+                pill.appendChild(pillText);
+
+                var closeBtn = document.createElement('button');
+                closeBtn.className = 'identity-toast-close';
+                closeBtn.title = 'Dismiss';
+                closeBtn.textContent = '×';
+                (function (radioId, pillEl) {
+                    closeBtn.addEventListener('click', function () {
+                        seen[radioId] = true;
+                        try { sessionStorage.setItem(seenKey, JSON.stringify(seen)); } catch (e) { /* ignore */ }
+                        if (pillEl.parentNode) pillEl.parentNode.removeChild(pillEl);
+                        // Hide toast container if no pills remain
+                        if (!toast.querySelector('.identity-toast-pill')) {
+                            toast.style.display = 'none';
+                        }
+                    });
+                }(r.id, pill));
+
+                pill.appendChild(closeBtn);
+                toast.appendChild(pill);
+            });
+
+            toast.style.display = '';
+        }
+    }
+
     function loadRadioInfo() {
         return fetchJSON('/api/v1/radios').then(function (data) {
             initRadioTabs(data);
+            renderIdentityBanner(data);
         }).catch(noop);
     }
 
