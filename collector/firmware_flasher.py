@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 
 # Thread-safe flash state
 _lock = threading.Lock()
-_state: dict = {"state": "idle", "log": [], "progress": ""}
+_state: dict = {"state": "idle", "log": [], "progress": "", "radio_id": None}
 
 
 def get_status() -> dict:
@@ -41,6 +41,7 @@ def _reset_state():
         _state["state"] = "idle"
         _state["log"] = []
         _state["progress"] = ""
+        _state["radio_id"] = None
 
 
 def _list_serial_by_id() -> set[str]:
@@ -100,6 +101,8 @@ def _flash_worker(fw_path: str, expected_hash: str, poller,
     usb_relay_gpio_pin = radio["usb_relay_gpio_pin"]
 
     _reset_state()
+    with _lock:
+        _state["radio_id"] = radio_id
     _set_state("flashing", "Verifying firmware hash...")
     _append_log("Verifying SHA256 hash...")
 

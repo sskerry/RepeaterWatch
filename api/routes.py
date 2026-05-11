@@ -43,13 +43,12 @@ def _hours():
         return 24
 
 
-@api.route("/device")
-def device_info():
-    info = models.get_device_info()
-    core = models.query_stats_core(hours=1)
+def _device_payload(radio_id: str) -> dict:
+    """Return the device info payload dict for the given radio_id."""
+    info = models.get_device_info(radio_id=radio_id)
+    core = models.query_stats_core(hours=1, radio_id=radio_id)
     uptime = core[-1]["uptime_secs"] if core else None
     pk = info.get("public_key", "")
-    # pubkey_prefix: first 4 hex chars (2 bytes) for map label
     pubkey_prefix = pk[:4].upper() if pk else ""
     lat = None
     lon = None
@@ -67,7 +66,6 @@ def device_info():
         "uptime_secs": uptime,
         "hardware": os.environ.get("MESHCORE_HARDWARE", ""),
     }
-    # Only expose sensitive details when user has full access
     if _has_full_access():
         result["public_key"] = pk
         result["lat"] = lat
@@ -76,35 +74,47 @@ def device_info():
         result["public_key"] = ""
         result["lat"] = None
         result["lon"] = None
-    return jsonify(result)
+    return result
+
+
+@api.route("/device")
+def device_info():
+    return jsonify(_device_payload('a'))
+
+
+def _stats_battery_payload(radio_id: str, hours: int) -> dict:
+    rows = models.query_stats_core(hours, radio_id=radio_id)
+    return {
+        "timestamps": [r["ts"] for r in rows],
+        "battery_mv": [r["battery_mv"] for r in rows],
+    }
 
 
 @api.route("/stats/battery")
 def stats_battery():
-    rows = models.query_stats_core(_hours())
-    return jsonify({
-        "timestamps": [r["ts"] for r in rows],
-        "battery_mv": [r["battery_mv"] for r in rows],
-    })
+    return jsonify(_stats_battery_payload('a', _hours()))
 
 
-@api.route("/stats/radio")
-def stats_radio():
-    rows = models.query_stats_radio(_hours())
-    return jsonify({
+def _stats_radio_payload(radio_id: str, hours: int) -> dict:
+    rows = models.query_stats_radio(hours, radio_id=radio_id)
+    return {
         "timestamps": [r["ts"] for r in rows],
         "noise_floor": [r["noise_floor"] for r in rows],
         "tx_air_secs": [r["tx_air_secs"] for r in rows],
         "rx_air_secs": [r["rx_air_secs"] for r in rows],
         "last_rssi": [r["last_rssi"] for r in rows],
         "last_snr": [r["last_snr"] for r in rows],
-    })
+    }
 
 
-@api.route("/stats/packets")
-def stats_packets():
-    rows = models.query_stats_packets(_hours())
-    return jsonify({
+@api.route("/stats/radio")
+def stats_radio():
+    return jsonify(_stats_radio_payload('a', _hours()))
+
+
+def _stats_packets_payload(radio_id: str, hours: int) -> dict:
+    rows = models.query_stats_packets(hours, radio_id=radio_id)
+    return {
         "timestamps": [r["ts"] for r in rows],
         "recv_total": [r["recv_total"] for r in rows],
         "sent_total": [r["sent_total"] for r in rows],
@@ -112,7 +122,12 @@ def stats_packets():
         "fwd_total": [r["fwd_total"] for r in rows],
         "fwd_errors": [r["fwd_errors"] for r in rows],
         "direct_dups": [r["direct_dups"] for r in rows],
-    })
+    }
+
+
+@api.route("/stats/packets")
+def stats_packets():
+    return jsonify(_stats_packets_payload('a', _hours()))
 
 
 @api.route("/stats/power")
@@ -132,26 +147,28 @@ def stats_power():
     })
 
 
-@api.route("/stats/airtime")
-def stats_airtime():
-    rows = models.query_airtime(_hours())
-    return jsonify({
+def _stats_airtime_payload(radio_id: str, hours: int) -> dict:
+    rows = models.query_airtime(hours, radio_id=radio_id)
+    return {
         "timestamps": [r["ts"] for r in rows],
         "tx_pct": [r["tx_pct"] for r in rows],
         "rx_pct": [r["rx_pct"] for r in rows],
-    })
+    }
 
 
-@api.route("/packets/activity")
-def packets_activity():
-    h = _hours()
-    bucket = request.args.get("bucket_minutes", 15, type=int)
-    rows = models.query_packets_activity(h, bucket)
+@api.route("/stats/airtime")
+def stats_airtime():
+    return jsonify(_stats_airtime_payload('a', _hours()))
+
+
+def _packets_activity_payload(radio_id: str, hours: int, bucket: int) -> dict:
+    """Return the packets/activity payload dict for the given radio."""
+    rows = models.query_packets_activity(hours, bucket, radio_id=radio_id)
 
     # If packet_log has no data, fall back to stats_packets deltas
     if not rows:
-        rows = models.query_packets_activity_from_stats(h)
-        return jsonify({
+        rows = models.query_packets_activity_from_stats(hours, radio_id=radio_id)
+        return {
             "timestamps": [r["bucket"] for r in rows],
             "tx_direct": [r["tx_direct"] for r in rows],
             "tx_flood": [r["tx_flood"] for r in rows],
@@ -161,9 +178,9 @@ def packets_activity():
             "dups_flood": [0] * len(rows),
             "rx_errors": [r["rx_errors"] for r in rows],
             "total": [r["total"] for r in rows],
-        })
+        }
 
-    dups = models.query_packet_dups(h)
+    dups = models.query_packet_dups(hours, radio_id=radio_id)
     dup_timestamps = sorted(d["ts"] for d in dups)
     dup_by_ts = {d["ts"]: d for d in dups}
 
@@ -196,7 +213,7 @@ def packets_activity():
     if trailing_errors and rx_errors_list:
         rx_errors_list[-1] += trailing_errors
 
-    return jsonify({
+    return {
         "timestamps":  [r["bucket"] for r in rows],
         "tx_direct":   [r["tx_direct"] for r in rows],
         "tx_flood":    [r["tx_flood"] for r in rows],
@@ -206,29 +223,46 @@ def packets_activity():
         "dups_flood":  dups_flood_list,
         "rx_errors":   rx_errors_list,
         "total":       [r["total"] for r in rows],
-    })
+    }
+
+
+@api.route("/packets/activity")
+def packets_activity():
+    h = _hours()
+    bucket = request.args.get("bucket_minutes", 15, type=int)
+    return jsonify(_packets_activity_payload('a', h, bucket))
+
+
+def _packets_recent_payload(radio_id: str, limit: int) -> list:
+    return models.query_packets_recent(limit, radio_id=radio_id)
 
 
 @api.route("/packets/recent")
 def packets_recent():
     limit = request.args.get("limit", 50, type=int)
-    rows = models.query_packets_recent(limit)
-    return jsonify(rows)
+    return jsonify(_packets_recent_payload('a', limit))
+
+
+def _neighbors_payload(radio_id: str) -> list:
+    return models.query_neighbors(radio_id=radio_id)
+
+
+def _neighbors_history_payload(radio_id: str, hours: int) -> dict:
+    rows = models.query_neighbor_history(hours, radio_id=radio_id)
+    return {
+        "timestamps": [r["ts"] for r in rows],
+        "count": [r["count"] for r in rows],
+    }
 
 
 @api.route("/neighbors")
 def neighbors():
-    rows = models.query_neighbors()
-    return jsonify(rows)
+    return jsonify(_neighbors_payload('a'))
 
 
 @api.route("/neighbors/history")
 def neighbors_history():
-    rows = models.query_neighbor_history(_hours())
-    return jsonify({
-        "timestamps": [r["ts"] for r in rows],
-        "count": [r["count"] for r in rows],
-    })
+    return jsonify(_neighbors_history_payload('a', _hours()))
 
 
 @api.route("/status")
@@ -372,6 +406,145 @@ def stats_pi_snapshot():
     return jsonify(result)
 
 
+# ── Per-radio API routes ──────────────────────────────────
+
+def _radio_listing_entry(radio: dict, poller_radios: dict) -> dict:
+    """Build a single entry for the /radios listing from a config dict and live status."""
+    rid = radio["id"]
+    live = poller_radios.get(rid, {})
+    entry = {
+        "id": rid,
+        "label": radio.get("label", "Radio"),
+        "iata": radio.get("iata", ""),
+        "connected": live.get("serial_connected", False),
+        "last_poll": live.get("last_poll", 0),
+        "poll_count": live.get("poll_count", 0),
+    }
+    if _has_full_access():
+        entry["serial_port"] = radio.get("serial_port", "")
+    return entry
+
+
+@api.route("/radios")
+def list_radios():
+    """List all configured radios with live connection status."""
+    poller = current_app.config.get("poller")
+    poller_status = poller.status if poller else {}
+    poller_radios = poller_status.get("radios", {})
+    return jsonify({
+        "dual_radio_mode": config.DUAL_RADIO_MODE,
+        "radios": [_radio_listing_entry(r, poller_radios) for r in config.RADIOS],
+    })
+
+
+def _validate_radio_id(radio_id: str):
+    """Return (radio_config, None) or (None, error_response) for a radio_id URL param."""
+    radio = config.get_radio(radio_id)
+    if radio is None:
+        return None, (jsonify({"error": "unknown radio"}), 404)
+    return radio, None
+
+
+@api.route("/radios/<radio_id>/device")
+def radio_device(radio_id: str):
+    _, err = _validate_radio_id(radio_id)
+    if err:
+        return err
+    return jsonify(_device_payload(radio_id))
+
+
+@api.route("/radios/<radio_id>/stats/radio")
+def radio_stats_radio(radio_id: str):
+    _, err = _validate_radio_id(radio_id)
+    if err:
+        return err
+    return jsonify(_stats_radio_payload(radio_id, _hours()))
+
+
+@api.route("/radios/<radio_id>/stats/packets")
+def radio_stats_packets(radio_id: str):
+    _, err = _validate_radio_id(radio_id)
+    if err:
+        return err
+    return jsonify(_stats_packets_payload(radio_id, _hours()))
+
+
+@api.route("/radios/<radio_id>/stats/battery")
+def radio_stats_battery(radio_id: str):
+    _, err = _validate_radio_id(radio_id)
+    if err:
+        return err
+    return jsonify(_stats_battery_payload(radio_id, _hours()))
+
+
+@api.route("/radios/<radio_id>/stats/airtime")
+def radio_stats_airtime(radio_id: str):
+    _, err = _validate_radio_id(radio_id)
+    if err:
+        return err
+    return jsonify(_stats_airtime_payload(radio_id, _hours()))
+
+
+@api.route("/radios/<radio_id>/packets/activity")
+def radio_packets_activity(radio_id: str):
+    _, err = _validate_radio_id(radio_id)
+    if err:
+        return err
+    h = _hours()
+    bucket = request.args.get("bucket_minutes", 15, type=int)
+    return jsonify(_packets_activity_payload(radio_id, h, bucket))
+
+
+@api.route("/radios/<radio_id>/packets/recent")
+def radio_packets_recent(radio_id: str):
+    _, err = _validate_radio_id(radio_id)
+    if err:
+        return err
+    limit = request.args.get("limit", 50, type=int)
+    return jsonify(_packets_recent_payload(radio_id, limit))
+
+
+@api.route("/radios/<radio_id>/neighbors")
+def radio_neighbors(radio_id: str):
+    _, err = _validate_radio_id(radio_id)
+    if err:
+        return err
+    return jsonify(_neighbors_payload(radio_id))
+
+
+@api.route("/radios/<radio_id>/neighbors/history")
+def radio_neighbors_history(radio_id: str):
+    _, err = _validate_radio_id(radio_id)
+    if err:
+        return err
+    return jsonify(_neighbors_history_payload(radio_id, _hours()))
+
+
+@api.route("/radios/<radio_id>/firmware/flash", methods=["POST"])
+def radio_firmware_flash(radio_id: str):
+    _, err = _validate_radio_id(radio_id)
+    if err:
+        return err
+    return _firmware_flash_handler(radio_id)
+
+
+# Idle state template returned when no flash is active for the requested radio
+_FIRMWARE_IDLE_STATE = {"state": "idle", "log": [], "progress": "", "radio_id": None}
+
+
+@api.route("/radios/<radio_id>/firmware/status")
+def radio_firmware_status(radio_id: str):
+    _, err = _validate_radio_id(radio_id)
+    if err:
+        return err
+    status = firmware_flasher.get_status()
+    # If the active flash is for a different radio, report idle for this one
+    active_radio = status.get("radio_id")
+    if active_radio is not None and active_radio != radio_id:
+        return jsonify(dict(_FIRMWARE_IDLE_STATE))
+    return jsonify(status)
+
+
 # ── Settings ──────────────────────────────────────────────
 
 SETTINGS_DEFAULTS = {
@@ -417,9 +590,8 @@ def put_settings():
     return jsonify({"status": "ok"})
 
 
-@api.route("/firmware/flash", methods=["POST"])
-def firmware_flash():
-    # Check if a flash is already in progress
+def _firmware_flash_handler(radio_id: str):
+    """Core firmware flash logic. Returns a Flask response."""
     current = firmware_flasher.get_status()
     if current["state"] == "flashing":
         return jsonify({"error": "Flash already in progress"}), 409
@@ -449,9 +621,14 @@ def firmware_flash():
 
     # Kick off flash in background thread
     poller = current_app.config.get("poller")
-    firmware_flasher.flash_firmware(fw_path, expected_hash, poller)
+    firmware_flasher.flash_firmware(fw_path, expected_hash, poller, radio_id=radio_id)
 
     return jsonify({"status": "started"})
+
+
+@api.route("/firmware/flash", methods=["POST"])
+def firmware_flash():
+    return _firmware_flash_handler('a')
 
 
 @api.route("/firmware/status")
