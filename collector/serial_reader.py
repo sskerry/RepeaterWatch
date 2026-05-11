@@ -13,7 +13,12 @@ logger = logging.getLogger(__name__)
 
 
 class SerialReader:
-    def __init__(self):
+    def __init__(self, port: str | None = None, baud: int | None = None,
+                 timeout: float | None = None, radio_id: str = 'a'):
+        self._port_name: str = port if port is not None else config.SERIAL_PORT
+        self._baud: int = baud if baud is not None else config.SERIAL_BAUD
+        self._timeout: float = timeout if timeout is not None else config.SERIAL_TIMEOUT
+        self._radio_id: str = radio_id
         self._port: serial.Serial | None = None
         self._lock = threading.Lock()
         self._connected = False
@@ -21,25 +26,29 @@ class SerialReader:
         self._last_raw_hex: str | None = None
 
     @property
+    def radio_id(self) -> str:
+        return self._radio_id
+
+    @property
     def connected(self) -> bool:
         return self._connected
 
     def set_packet_callback(self, cb):
-        """Callback signature: cb(info_line: str, raw_hex: str | None)"""
+        """Callback signature: cb(info_line: str, raw_hex: str | None, radio_id: str)"""
         self._packet_callback = cb
 
     def connect(self) -> bool:
         try:
             self._port = serial.Serial(
-                port=config.SERIAL_PORT,
-                baudrate=config.SERIAL_BAUD,
-                timeout=config.SERIAL_TIMEOUT,
+                port=self._port_name,
+                baudrate=self._baud,
+                timeout=self._timeout,
             )
             self._connected = True
-            logger.info("Connected to %s at %d baud", config.SERIAL_PORT, config.SERIAL_BAUD)
+            logger.info("Connected to %s at %d baud (radio %s)", self._port_name, self._baud, self._radio_id)
             return True
         except (serial.SerialException, OSError, Exception) as e:
-            logger.error("Failed to connect to %s: %s", config.SERIAL_PORT, e)
+            logger.error("Failed to connect to %s (radio %s): %s", self._port_name, self._radio_id, e)
             self._connected = False
             return False
 
@@ -58,7 +67,7 @@ class SerialReader:
                 # Drain and process any pending lines before sending
                 self._drain_pending()
                 self._port.write(f"{command}\r\n".encode())
-                return self._read_response(timeout or config.SERIAL_TIMEOUT)
+                return self._read_response(timeout or self._timeout)
             except serial.SerialException as e:
                 logger.error("Serial error sending '%s': %s", command, e)
                 self._connected = False
@@ -126,7 +135,7 @@ class SerialReader:
 
         if "U:" in line and ("TX," in line or "RX," in line):
             if self._packet_callback:
-                self._packet_callback(line, self._last_raw_hex)
+                self._packet_callback(line, self._last_raw_hex, self._radio_id)
             self._last_raw_hex = None
 
     def send_command_json(self, command: str) -> dict | None:

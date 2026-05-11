@@ -34,16 +34,19 @@ def aligned_ts(epoch: float | None = None) -> int:
 
 # ── Device info ──────────────────────────────────────────────
 
-def set_device_info(key: str, value: str):
+def set_device_info(key: str, value: str, radio_id: str = 'a'):
     _conn().execute(
-        "INSERT OR REPLACE INTO device_info (key, value) VALUES (?, ?)",
-        (key, value),
+        "INSERT OR REPLACE INTO device_info (radio_id, key, value) VALUES (?, ?, ?)",
+        (radio_id, key, value),
     )
     _conn().commit()
 
 
-def get_device_info() -> dict:
-    rows = _conn().execute("SELECT key, value FROM device_info").fetchall()
+def get_device_info(radio_id: str = 'a') -> dict:
+    rows = _conn().execute(
+        "SELECT key, value FROM device_info WHERE radio_id = ?",
+        (radio_id,),
+    ).fetchall()
     return {r["key"]: r["value"] for r in rows}
 
 
@@ -69,21 +72,22 @@ def get_all_settings() -> dict:
 
 # ── Stats inserts ────────────────────────────────────────────
 
-def insert_stats_core(ts: int, battery_mv, uptime_secs, errors, queue_len):
+def insert_stats_core(ts: int, battery_mv, uptime_secs, errors, queue_len,
+                      radio_id: str = 'a'):
     _conn().execute(
-        "INSERT OR REPLACE INTO stats_core (ts, battery_mv, uptime_secs, errors, queue_len) "
-        "VALUES (?, ?, ?, ?, ?)",
-        (ts, battery_mv, uptime_secs, errors, queue_len),
+        "INSERT OR REPLACE INTO stats_core (ts, radio_id, battery_mv, uptime_secs, errors, queue_len) "
+        "VALUES (?, ?, ?, ?, ?, ?)",
+        (ts, radio_id, battery_mv, uptime_secs, errors, queue_len),
     )
     _conn().commit()
 
 
 def insert_stats_radio(ts: int, noise_floor, tx_air_secs, rx_air_secs,
-                       last_rssi=None, last_snr=None):
+                       last_rssi=None, last_snr=None, radio_id: str = 'a'):
     _conn().execute(
-        "INSERT OR REPLACE INTO stats_radio (ts, noise_floor, tx_air_secs, rx_air_secs, last_rssi, last_snr) "
-        "VALUES (?, ?, ?, ?, ?, ?)",
-        (ts, noise_floor, tx_air_secs, rx_air_secs, last_rssi, last_snr),
+        "INSERT OR REPLACE INTO stats_radio (ts, radio_id, noise_floor, tx_air_secs, rx_air_secs, last_rssi, last_snr) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?)",
+        (ts, radio_id, noise_floor, tx_air_secs, rx_air_secs, last_rssi, last_snr),
     )
     _conn().commit()
 
@@ -91,13 +95,13 @@ def insert_stats_radio(ts: int, noise_floor, tx_air_secs, rx_air_secs,
 def insert_stats_packets(ts: int, recv_total, sent_total, recv_errors,
                          fwd_total, fwd_errors, direct_dups, flood_dups=None,
                          direct_tx=None, flood_tx=None,
-                         direct_rx=None, flood_rx=None):
+                         direct_rx=None, flood_rx=None, radio_id: str = 'a'):
     _conn().execute(
         "INSERT OR REPLACE INTO stats_packets "
-        "(ts, recv_total, sent_total, recv_errors, fwd_total, fwd_errors, "
+        "(ts, radio_id, recv_total, sent_total, recv_errors, fwd_total, fwd_errors, "
         "direct_dups, flood_dups, direct_tx, flood_tx, direct_rx, flood_rx) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-        (ts, recv_total, sent_total, recv_errors, fwd_total, fwd_errors,
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        (ts, radio_id, recv_total, sent_total, recv_errors, fwd_total, fwd_errors,
          direct_dups, flood_dups, direct_tx, flood_tx, direct_rx, flood_rx),
     )
     _conn().commit()
@@ -120,47 +124,62 @@ def insert_stats_extpower(ts: int, channels: list[dict]):
 
 
 def insert_packet(ts: int, direction, pkt_type, route, snr, rssi, score, hash_,
-                   raw_hex: str | None = None):
+                   raw_hex: str | None = None, radio_id: str = 'a'):
     _conn().execute(
-        "INSERT INTO packet_log (ts, direction, pkt_type, route, snr, rssi, score, hash, raw_hex) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-        (ts, direction, pkt_type, route, snr, rssi, score, hash_, raw_hex),
+        "INSERT INTO packet_log (ts, radio_id, direction, pkt_type, route, snr, rssi, score, hash, raw_hex) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        (ts, radio_id, direction, pkt_type, route, snr, rssi, score, hash_, raw_hex),
     )
     _conn().commit()
 
 
 def upsert_neighbor(pubkey_prefix: str, name: str | None, device_role: str | None,
                     last_seen: int, last_snr: float | None, last_rssi: float | None,
-                    lat: float | None, lon: float | None):
+                    lat: float | None, lon: float | None, radio_id: str = 'a'):
     _conn().execute(
         "INSERT OR REPLACE INTO neighbors "
-        "(pubkey_prefix, name, device_role, last_seen, last_snr, last_rssi, lat, lon) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-        (pubkey_prefix, name, device_role, last_seen, last_snr, last_rssi, lat, lon),
+        "(radio_id, pubkey_prefix, name, device_role, last_seen, last_snr, last_rssi, lat, lon) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        (radio_id, pubkey_prefix, name, device_role, last_seen, last_snr, last_rssi, lat, lon),
     )
     _conn().commit()
 
 
 def insert_neighbor_sighting(ts: int, pubkey_prefix: str,
-                             snr: float | None = None, rssi: float | None = None):
+                             snr: float | None = None, rssi: float | None = None,
+                             radio_id: str = 'a'):
     _conn().execute(
-        "INSERT OR REPLACE INTO neighbor_sightings (ts, pubkey_prefix, snr, rssi) "
-        "VALUES (?, ?, ?, ?)",
-        (ts, pubkey_prefix, snr, rssi),
+        "INSERT OR REPLACE INTO neighbor_sightings (ts, radio_id, pubkey_prefix, snr, rssi) "
+        "VALUES (?, ?, ?, ?, ?)",
+        (ts, radio_id, pubkey_prefix, snr, rssi),
     )
     _conn().commit()
 
 
-def delete_old_neighbors(max_age_hours: int) -> int:
-    """Delete neighbors not seen in the last *max_age_hours* hours."""
+def delete_old_neighbors(max_age_hours: int, radio_id: str | None = None) -> int:
+    """Delete neighbors not seen in the last *max_age_hours* hours.
+
+    If radio_id is None, delete across all radios (existing behavior).
+    """
     cutoff = int(time.time()) - max_age_hours * 3600
     conn = _conn()
-    conn.execute(
-        "DELETE FROM neighbor_sightings WHERE pubkey_prefix IN "
-        "(SELECT pubkey_prefix FROM neighbors WHERE last_seen < ?)",
-        (cutoff,),
-    )
-    cur = conn.execute("DELETE FROM neighbors WHERE last_seen < ?", (cutoff,))
+    if radio_id is None:
+        conn.execute(
+            "DELETE FROM neighbor_sightings WHERE pubkey_prefix IN "
+            "(SELECT pubkey_prefix FROM neighbors WHERE last_seen < ?)",
+            (cutoff,),
+        )
+        cur = conn.execute("DELETE FROM neighbors WHERE last_seen < ?", (cutoff,))
+    else:
+        conn.execute(
+            "DELETE FROM neighbor_sightings WHERE radio_id = ? AND pubkey_prefix IN "
+            "(SELECT pubkey_prefix FROM neighbors WHERE radio_id = ? AND last_seen < ?)",
+            (radio_id, radio_id, cutoff),
+        )
+        cur = conn.execute(
+            "DELETE FROM neighbors WHERE radio_id = ? AND last_seen < ?",
+            (radio_id, cutoff),
+        )
     conn.commit()
     return cur.rowcount
 
@@ -175,39 +194,39 @@ def _since(hours: int) -> int:
     return aligned_ts() - _clamp_hours(hours) * 3600
 
 
-def query_stats_core(hours: int = 24) -> list[dict]:
+def query_stats_core(hours: int = 24, radio_id: str = 'a') -> list[dict]:
     rows = _conn().execute(
         "SELECT ts, battery_mv, uptime_secs, errors, queue_len "
-        "FROM stats_core WHERE ts >= ? ORDER BY ts",
-        (_since(hours),),
+        "FROM stats_core WHERE ts >= ? AND radio_id = ? ORDER BY ts",
+        (_since(hours), radio_id),
     ).fetchall()
     return [dict(r) for r in rows]
 
 
-def query_stats_radio(hours: int = 24) -> list[dict]:
+def query_stats_radio(hours: int = 24, radio_id: str = 'a') -> list[dict]:
     rows = _conn().execute(
         "SELECT ts, noise_floor, tx_air_secs, rx_air_secs, last_rssi, last_snr "
-        "FROM stats_radio WHERE ts >= ? ORDER BY ts",
-        (_since(hours),),
+        "FROM stats_radio WHERE ts >= ? AND radio_id = ? ORDER BY ts",
+        (_since(hours), radio_id),
     ).fetchall()
     return [dict(r) for r in rows]
 
 
-def query_stats_packets(hours: int = 24) -> list[dict]:
+def query_stats_packets(hours: int = 24, radio_id: str = 'a') -> list[dict]:
     rows = _conn().execute(
         "SELECT ts, recv_total, sent_total, recv_errors, fwd_total, fwd_errors, "
         "direct_dups, flood_dups, direct_tx, flood_tx, direct_rx, flood_rx "
-        "FROM stats_packets WHERE ts >= ? ORDER BY ts",
-        (_since(hours),),
+        "FROM stats_packets WHERE ts >= ? AND radio_id = ? ORDER BY ts",
+        (_since(hours), radio_id),
     ).fetchall()
     return [dict(r) for r in rows]
 
 
-def query_packet_dups(hours: int = 24) -> list[dict]:
+def query_packet_dups(hours: int = 24, radio_id: str = 'a') -> list[dict]:
     rows = _conn().execute(
         "SELECT ts, direct_dups, flood_dups, recv_errors "
-        "FROM stats_packets WHERE ts >= ? ORDER BY ts",
-        (_since(hours),),
+        "FROM stats_packets WHERE ts >= ? AND radio_id = ? ORDER BY ts",
+        (_since(hours), radio_id),
     ).fetchall()
     result = []
     prev = None
@@ -229,7 +248,7 @@ def query_packet_dups(hours: int = 24) -> list[dict]:
     return result
 
 
-def query_packets_activity_from_stats(hours: int = 24) -> list[dict]:
+def query_packets_activity_from_stats(hours: int = 24, radio_id: str = 'a') -> list[dict]:
     """Derive per-interval packet counts from cumulative stats_packets counters.
 
     Counter resets (e.g. after service restart) produce a negative delta.
@@ -238,8 +257,8 @@ def query_packets_activity_from_stats(hours: int = 24) -> list[dict]:
     """
     rows = _conn().execute(
         "SELECT ts, direct_tx, flood_tx, direct_rx, flood_rx, recv_errors "
-        "FROM stats_packets WHERE ts >= ? ORDER BY ts",
-        (_since(hours),),
+        "FROM stats_packets WHERE ts >= ? AND radio_id = ? ORDER BY ts",
+        (_since(hours), radio_id),
     ).fetchall()
     result = []
     prev = None
@@ -289,16 +308,17 @@ def query_stats_extpower(hours: int = 24) -> list[dict]:
     return [dict(r) for r in rows]
 
 
-def query_packets_recent(limit: int = 50) -> list[dict]:
+def query_packets_recent(limit: int = 50, radio_id: str = 'a') -> list[dict]:
     rows = _conn().execute(
-        "SELECT id, ts, direction, pkt_type, route, snr, rssi, score, hash, raw_hex "
-        "FROM packet_log ORDER BY id DESC LIMIT ?",
-        (min(limit, 500),),
+        "SELECT id, ts, radio_id, direction, pkt_type, route, snr, rssi, score, hash, raw_hex "
+        "FROM packet_log WHERE radio_id = ? ORDER BY id DESC LIMIT ?",
+        (radio_id, min(limit, 500)),
     ).fetchall()
     return [dict(r) for r in rows]
 
 
-def query_packets_activity(hours: int = 24, bucket_minutes: int = 15) -> list[dict]:
+def query_packets_activity(hours: int = 24, bucket_minutes: int = 15,
+                           radio_id: str = 'a') -> list[dict]:
     bucket_secs = max(bucket_minutes, 1) * 60
     since = _since(hours)
     rows = _conn().execute(
@@ -308,22 +328,24 @@ def query_packets_activity(hours: int = 24, bucket_minutes: int = 15) -> list[di
         "SUM(CASE WHEN direction='RX' AND route IN ('D','TD') THEN 1 ELSE 0 END) AS rx_direct, "
         "SUM(CASE WHEN direction='RX' AND route IN ('F','TF') THEN 1 ELSE 0 END) AS rx_flood, "
         "COUNT(*) AS total "
-        "FROM packet_log WHERE ts >= ? "
+        "FROM packet_log WHERE ts >= ? AND radio_id = ? "
         "GROUP BY bucket ORDER BY bucket",
-        (bucket_secs, bucket_secs, since),
+        (bucket_secs, bucket_secs, since, radio_id),
     ).fetchall()
     return [dict(r) for r in rows]
 
 
-def query_neighbors() -> list[dict]:
+def query_neighbors(radio_id: str = 'a') -> list[dict]:
     rows = _conn().execute(
         "SELECT n.pubkey_prefix, n.name, n.device_role, n.last_seen, "
         "n.last_snr, n.last_rssi, n.lat, n.lon, "
         "AVG(s.snr) AS avg_snr, AVG(s.rssi) AS avg_rssi, COUNT(s.ts) AS sighting_count "
         "FROM neighbors n "
-        "LEFT JOIN neighbor_sightings s ON n.pubkey_prefix = s.pubkey_prefix "
+        "LEFT JOIN neighbor_sightings s ON n.radio_id = s.radio_id AND n.pubkey_prefix = s.pubkey_prefix "
+        "WHERE n.radio_id = ? "
         "GROUP BY n.pubkey_prefix "
-        "ORDER BY n.last_seen DESC"
+        "ORDER BY n.last_seen DESC",
+        (radio_id,),
     ).fetchall()
     result = []
     for r in rows:
@@ -334,22 +356,22 @@ def query_neighbors() -> list[dict]:
     return result
 
 
-def query_neighbor_history(hours: int = 24) -> list[dict]:
+def query_neighbor_history(hours: int = 24, radio_id: str = 'a') -> list[dict]:
     since = _since(hours)
     rows = _conn().execute(
         "SELECT ts, COUNT(DISTINCT pubkey_prefix) AS count "
-        "FROM neighbor_sightings WHERE ts >= ? "
+        "FROM neighbor_sightings WHERE ts >= ? AND radio_id = ? "
         "GROUP BY ts ORDER BY ts",
-        (since,),
+        (since, radio_id),
     ).fetchall()
     return [dict(r) for r in rows]
 
 
-def query_airtime(hours: int = 24) -> list[dict]:
+def query_airtime(hours: int = 24, radio_id: str = 'a') -> list[dict]:
     rows = _conn().execute(
         "SELECT ts, tx_air_secs, rx_air_secs "
-        "FROM stats_radio WHERE ts >= ? ORDER BY ts",
-        (_since(hours),),
+        "FROM stats_radio WHERE ts >= ? AND radio_id = ? ORDER BY ts",
+        (_since(hours), radio_id),
     ).fetchall()
     result = []
     prev = None

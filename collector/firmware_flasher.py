@@ -51,9 +51,9 @@ def _list_serial_by_id() -> set[str]:
     return set(os.listdir(by_id))
 
 
-def _set_usb_relay(enable: bool):
+def _set_usb_relay(enable: bool, relay_pin: int):
     """Toggle the USB relay via pinctrl."""
-    pin = str(config.USB_RELAY_GPIO_PIN)
+    pin = str(relay_pin)
     level = "dh" if enable else "dl"
     try:
         subprocess.run(
@@ -73,18 +73,32 @@ def verify_sha256(path: str, expected: str) -> bool:
     return h.hexdigest().lower() == expected.lower()
 
 
-def flash_firmware(fw_path: str, expected_hash: str, poller) -> None:
+def flash_firmware(fw_path: str, expected_hash: str, poller,
+                   radio_id: str = 'a') -> None:
     """Run firmware flash in a background thread."""
     t = threading.Thread(
         target=_flash_worker,
-        args=(fw_path, expected_hash, poller),
+        args=(fw_path, expected_hash, poller, radio_id),
         daemon=True,
         name="firmware-flash",
     )
     t.start()
 
 
-def _flash_worker(fw_path: str, expected_hash: str, poller) -> None:
+def _flash_worker(fw_path: str, expected_hash: str, poller,
+                  radio_id: str = 'a') -> None:
+    # Look up the target radio's config
+    radio = config.get_radio(radio_id)
+    if radio is None:
+        _reset_state()
+        _set_state("error", f"Unknown radio_id: {radio_id}")
+        _append_log(f"ERROR: No radio config found for radio_id='{radio_id}'.")
+        return
+
+    flash_serial_port = radio["flash_serial_port"]
+    reset_gpio_pin = radio["reset_gpio_pin"]
+    usb_relay_gpio_pin = radio["usb_relay_gpio_pin"]
+
     _reset_state()
     _set_state("flashing", "Verifying firmware hash...")
     _append_log("Verifying SHA256 hash...")
@@ -106,9 +120,13 @@ def _flash_worker(fw_path: str, expected_hash: str, poller) -> None:
     except Exception as e:
         _append_log(f"Warning stopping collector: {e}")
 
-    # Stop external services
+    # Stop external services — use templated unit names in dual-radio mode
     _set_state("flashing", "Stopping SerialMux and mctomqtt...")
-    for svc in ("SerialMux", "mctomqtt"):
+    if config.DUAL_RADIO_MODE:
+        svcs = (f"SerialMux@{radio_id}.service", f"mctomqtt@{radio_id}.service")
+    else:
+        svcs = ("SerialMux", "mctomqtt")
+    for svc in svcs:
         _append_log(f"Stopping {svc}...")
         try:
             result = subprocess.run(
@@ -126,12 +144,12 @@ def _flash_worker(fw_path: str, expected_hash: str, poller) -> None:
     _set_state("flashing", "Entering bootloader mode...")
     _append_log("Entering bootloader mode via GPIO...")
     try:
-        radio_gpio.bootloader_mode()
+        radio_gpio.bootloader_mode(pin=reset_gpio_pin)
         _append_log("Bootloader mode triggered.")
     except Exception as e:
         _append_log(f"ERROR: Failed to enter bootloader mode: {e}")
         _set_state("error", "GPIO bootloader failed")
-        _restart_services(poller)
+        _restart_services(poller, radio_id, svcs, usb_relay_gpio_pin)
         _cleanup(fw_path)
         _append_log("Done.")
         return
@@ -140,7 +158,7 @@ def _flash_worker(fw_path: str, expected_hash: str, poller) -> None:
     _set_state("flashing", "Enabling radio USB...")
     _append_log("Enabling radio USB relay...")
     before_devices = _list_serial_by_id()
-    _set_usb_relay(True)
+    _set_usb_relay(True, usb_relay_gpio_pin)
     _append_log("Radio USB enabled.")
 
     # Wait for USB enumeration and detect new device
@@ -165,15 +183,15 @@ def _flash_worker(fw_path: str, expected_hash: str, poller) -> None:
         dfu_port = f"/dev/serial/by-id/{detected}"
         _append_log(f"DFU port ready: {dfu_port}")
     else:
-        # Fall back to configured port
-        port = models.get_setting("flash_serial_port", config.FLASH_SERIAL_PORT)
+        # Fall back to configured port for this radio
+        port = models.get_setting("flash_serial_port", flash_serial_port)
         _set_state("flashing", "Waiting for DFU port...")
         _append_log(f"Waiting for {port} to appear...")
         dfu_port = _wait_for_port(port, timeout=15)
         if not dfu_port:
             _append_log(f"ERROR: {port} did not appear within 15 seconds.")
             _set_state("error", "DFU port not found")
-            _restart_services(poller)
+            _restart_services(poller, radio_id, svcs, usb_relay_gpio_pin)
             _cleanup(fw_path)
             _append_log("Done.")
             return
@@ -233,7 +251,7 @@ def _flash_worker(fw_path: str, expected_hash: str, poller) -> None:
         _set_state("error", str(e))
         flash_failed = True
 
-    _restart_services(poller)
+    _restart_services(poller, radio_id, svcs, usb_relay_gpio_pin)
     _cleanup(fw_path)
     _append_log("Done.")
 
@@ -254,10 +272,10 @@ def _wait_for_port(port: str, timeout: int = 15) -> str | None:
     return None
 
 
-def _restart_services(poller):
+def _restart_services(poller, radio_id: str, svcs: tuple, relay_pin: int):
     """Restart external services and the collector poller."""
     _append_log("Restarting services...")
-    for svc in ("SerialMux", "mctomqtt"):
+    for svc in svcs:
         _append_log(f"Starting {svc}...")
         try:
             result = subprocess.run(
@@ -273,7 +291,7 @@ def _restart_services(poller):
 
     # Disable USB relay now that flash is complete
     _append_log("Disabling radio USB relay...")
-    _set_usb_relay(False)
+    _set_usb_relay(False, relay_pin)
     _append_log("Radio USB disabled.")
 
     _append_log("Restarting collector poller...")

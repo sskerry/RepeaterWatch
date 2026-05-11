@@ -25,27 +25,49 @@ logger = logging.getLogger(__name__)
 
 class StatsPoller:
     def __init__(self):
-        self.reader = SerialReader()
+        # Build one SerialReader per radio in config.RADIOS
+        self.readers: dict[str, SerialReader] = {}
+        for r in config.RADIOS:
+            self.readers[r["id"]] = SerialReader(
+                port=r["serial_port"],
+                baud=r["serial_baud"],
+                timeout=config.SERIAL_TIMEOUT,
+                radio_id=r["id"],
+            )
+
         self._thread: threading.Thread | None = None
         self._stop_event = threading.Event()
-        self._last_poll: float = 0
-        self._poll_count: int = 0
-        self._error_count: int = 0
+        # Per-reader tracking
+        self._last_poll: dict[str, float] = {rid: 0 for rid in self.readers}
+        self._poll_count: dict[str, int] = {rid: 0 for rid in self.readers}
+        self._error_count: dict[str, int] = {rid: 0 for rid in self.readers}
 
     @property
     def status(self) -> dict:
+        radios = {}
+        for rid, reader in self.readers.items():
+            radios[rid] = {
+                "serial_connected": reader.connected,
+                "serial_port": reader._port_name,
+                "last_poll": self._last_poll.get(rid, 0),
+                "poll_count": self._poll_count.get(rid, 0),
+                "error_count": self._error_count.get(rid, 0),
+            }
         return {
-            "serial_connected": self.reader.connected,
-            "serial_port": config.SERIAL_PORT,
-            "last_poll": self._last_poll,
-            "poll_count": self._poll_count,
-            "error_count": self._error_count,
             "running": self._thread is not None and self._thread.is_alive(),
+            "radios": radios,
+            # Backward-compat: expose radio 'a' fields at top level
+            "serial_connected": self.readers["a"].connected if "a" in self.readers else False,
+            "serial_port": self.readers["a"]._port_name if "a" in self.readers else config.SERIAL_PORT,
+            "last_poll": self._last_poll.get("a", 0),
+            "poll_count": self._poll_count.get("a", 0),
+            "error_count": self._error_count.get("a", 0),
         }
 
     def start(self):
         self._stop_event.clear()
-        self.reader.set_packet_callback(self._on_packet)
+        for reader in self.readers.values():
+            reader.set_packet_callback(self._on_packet)
         self._thread = threading.Thread(target=self._run, daemon=True, name="stats-poller")
         self._thread.start()
 
@@ -53,34 +75,40 @@ class StatsPoller:
         self._stop_event.set()
         if self._thread:
             self._thread.join(timeout=10)
-        self.reader.disconnect()
+        for reader in self.readers.values():
+            reader.disconnect()
 
     def _run(self):
-        self._connect_with_retry()
+        # Connect all readers with retry
+        for reader in self.readers.values():
+            self._connect_with_retry(reader)
 
-        if self.reader.connected:
-            # Give the radio a moment to finish booting before sending commands
-            time.sleep(2)
-            self.reader.read_background_lines()
-            collect_device_info(self.reader)
+        # Device info + initial background line drain for connected readers
+        for rid, reader in self.readers.items():
+            if reader.connected:
+                time.sleep(2)
+                reader.read_background_lines()
+                collect_device_info(reader, radio_id=rid)
 
         while not self._stop_event.is_set():
             ts = models.aligned_ts()
 
-            # Pi health — always collect (no serial needed)
+            # Pi health — always collect once per cycle (Pi-wide, not per-radio)
             self._poll_pi_health(ts)
 
-            if not self.reader.connected:
-                self._connect_with_retry()
+            # Per-radio serial polling
+            for rid, reader in self.readers.items():
+                if not reader.connected:
+                    self._connect_with_retry(reader)
 
-            if self.reader.connected:
-                try:
-                    self._poll_serial(ts)
-                    self._last_poll = time.time()
-                    self._poll_count += 1
-                except Exception:
-                    logger.exception("Error during poll cycle")
-                    self._error_count += 1
+                if reader.connected:
+                    try:
+                        self._poll_serial(ts, rid, reader)
+                        self._last_poll[rid] = time.time()
+                        self._poll_count[rid] = self._poll_count.get(rid, 0) + 1
+                    except Exception:
+                        logger.exception("Error during poll cycle for radio %s", rid)
+                        self._error_count[rid] = self._error_count.get(rid, 0) + 1
 
             # Purge old data once per cycle
             try:
@@ -92,11 +120,14 @@ class StatsPoller:
 
             self._wait_next_cycle()
 
-    def _connect_with_retry(self):
+    def _connect_with_retry(self, reader: SerialReader):
         for attempt in range(3):
-            if self.reader.connect():
+            if reader.connect():
                 return
-            logger.warning("Connection attempt %d failed, retrying...", attempt + 1)
+            logger.warning(
+                "Connection attempt %d failed for radio %s, retrying...",
+                attempt + 1, reader.radio_id,
+            )
             time.sleep(5)
 
     def _wait_next_cycle(self):
@@ -106,11 +137,12 @@ class StatsPoller:
             if remaining <= 0:
                 break
             self._stop_event.wait(min(remaining, 5))
-            self.reader.read_background_lines()
+            for reader in self.readers.values():
+                reader.read_background_lines()
 
-    def _poll_serial(self, ts: int):
+    def _poll_serial(self, ts: int, radio_id: str, reader: SerialReader):
         # stats-core
-        data = self.reader.send_command_json("stats-core")
+        data = reader.send_command_json("stats-core")
         if data:
             models.insert_stats_core(
                 ts,
@@ -118,10 +150,11 @@ class StatsPoller:
                 uptime_secs=data.get("uptime_secs"),
                 errors=data.get("errors"),
                 queue_len=data.get("queue_len"),
+                radio_id=radio_id,
             )
 
         # stats-radio
-        data = self.reader.send_command_json("stats-radio")
+        data = reader.send_command_json("stats-radio")
         if data:
             # AGC resets in firmware 1.14.x briefly zero out the noise floor
             # register (0x0000 → 0 dBm).  A real 0 dBm reading is physically
@@ -135,10 +168,11 @@ class StatsPoller:
                 rx_air_secs=data.get("rx_air_secs"),
                 last_rssi=data.get("last_rssi"),
                 last_snr=data.get("last_snr"),
+                radio_id=radio_id,
             )
 
         # stats-packets
-        data = self.reader.send_command_json("stats-packets")
+        data = reader.send_command_json("stats-packets")
         if data:
             models.insert_stats_packets(
                 ts,
@@ -153,12 +187,13 @@ class StatsPoller:
                 flood_tx=data.get("flood_tx"),
                 direct_rx=data.get("direct_rx"),
                 flood_rx=data.get("flood_rx"),
+                radio_id=radio_id,
             )
 
         # stats-extpower (only when using INA3221 power source)
         if models.get_setting("power_source", "ina3221") != "ina3221":
             return
-        data = self.reader.send_command_json("stats-extpower")
+        data = reader.send_command_json("stats-extpower")
         if data:
             channels = []
             for ch_num in range(1, 4):
@@ -226,7 +261,7 @@ class StatsPoller:
         except Exception:
             logger.exception("Error collecting Pi health metrics")
 
-    def _on_packet(self, info_line: str, raw_hex: str | None):
+    def _on_packet(self, info_line: str, raw_hex: str | None, radio_id: str = 'a'):
         parsed = parse_info_line(info_line)
         if not parsed:
             return
@@ -244,6 +279,7 @@ class StatsPoller:
             score=parsed["score"],
             hash_=parsed["hash"],
             raw_hex=raw_hex,
+            radio_id=radio_id,
         )
 
         # Decode adverts (type=4) for neighbor tracking
@@ -262,15 +298,17 @@ class StatsPoller:
                         last_rssi=parsed["rssi"],
                         lat=advert["lat"],
                         lon=advert["lon"],
+                        radio_id=radio_id,
                     )
                     models.insert_neighbor_sighting(
                         models.aligned_ts(ts),
                         advert["pubkey_prefix"],
                         snr=parsed["snr"],
                         rssi=parsed["rssi"],
+                        radio_id=radio_id,
                     )
                     logger.info(
-                        "Neighbor: %s (%s) SNR=%s lat=%s lon=%s",
-                        advert["name"], advert["device_role_name"],
+                        "Neighbor (radio %s): %s (%s) SNR=%s lat=%s lon=%s",
+                        radio_id, advert["name"], advert["device_role_name"],
                         parsed["snr"], advert["lat"], advert["lon"],
                     )

@@ -78,25 +78,31 @@ def _get_backend():
     )
 
 
-def reset_radio():
-    """Pulse reset LOW for 0.5s — normal hard reset."""
+def reset_radio(pin: int | None = None):
+    """Pulse reset LOW for 0.5s — normal hard reset.
+
+    If pin is None, falls back to config.RADIO_RESET_GPIO_PIN (radio A default).
+    """
     be = _get_backend()
-    pin = config.RADIO_RESET_GPIO_PIN
-    be.pulse(pin, [
+    actual_pin = pin if pin is not None else config.RADIO_RESET_GPIO_PIN
+    be.pulse(actual_pin, [
         (be.LOW(), 0.5),
         (be.HIGH(), 0),
     ])
-    logger.info("Radio reset via GPIO %d", pin)
+    logger.info("Radio reset via GPIO %d", actual_pin)
 
 
-def bootloader_mode():
-    """Double-pulse reset for DFU/bootloader entry."""
+def bootloader_mode(pin: int | None = None):
+    """Double-pulse reset for DFU/bootloader entry.
+
+    If pin is None, falls back to config.RADIO_RESET_GPIO_PIN (radio A default).
+    """
     be = _get_backend()
-    pin = config.RADIO_RESET_GPIO_PIN
-    be.pulse(pin, [
+    actual_pin = pin if pin is not None else config.RADIO_RESET_GPIO_PIN
+    be.pulse(actual_pin, [
         (be.LOW(), 0.1),
         (be.HIGH(), 0.2),
         (be.LOW(), 0.1),
         (be.HIGH(), 0),
     ])
-    logger.info("Radio entered bootloader mode via GPIO %d", pin)
+    logger.info("Radio entered bootloader mode via GPIO %d", actual_pin)
