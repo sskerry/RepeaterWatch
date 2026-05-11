@@ -5,6 +5,11 @@ from dotenv import load_dotenv
 
 load_dotenv(Path(__file__).resolve().parent / ".env")
 
+# --- Single-radio legacy env vars (radio A defaults) ---------------------
+# These remain as module-level constants so existing code paths that haven't
+# been refactored to radio_id-awareness keep working. They always reflect
+# radio 'a' (the default / only radio in single-radio mode).
+
 SERIAL_PORT = os.environ.get("MESHCORE_SERIAL_PORT", "/dev/ttyV0")
 SERIAL_BAUD = int(os.environ.get("MESHCORE_SERIAL_BAUD", "115200"))
 SERIAL_TIMEOUT = float(os.environ.get("MESHCORE_SERIAL_TIMEOUT", "5"))
@@ -63,3 +68,71 @@ AS3935_MIN_DISTANCE = int(os.environ.get("MESHCORE_AS3935_MIN_DISTANCE", "2"))  
 BQ24074_CHG_GPIO = int(os.environ.get("MESHCORE_BQ24074_CHG_GPIO", "19"))
 BQ24074_PGOOD_GPIO = int(os.environ.get("MESHCORE_BQ24074_PGOOD_GPIO", "13"))
 BQ24074_CE_GPIO = int(os.environ.get("MESHCORE_BQ24074_CE_GPIO", "6"))
+
+
+# --- Dual-radio config ---------------------------------------------------
+# RepeaterWatch can host a single radio (default) or two radios on one Pi
+# (cross-band repeater). Toggle via MESHCORE_DUAL_RADIO_MODE=1.
+#
+# Schema: RADIOS is a list of dicts, each with:
+#   id                    short identifier used in URLs, MQTT routing, and the
+#                         radio_id column on DB tables. "a" / "b".
+#   label                 human-readable label shown in the dashboard tab.
+#   serial_port           SerialMux virtual port for stats/commands (ttyV0*).
+#   flash_serial_port     /dev/serial/by-id/... path used during DFU flash.
+#   terminal_serial_port  SerialMux virtual port exposed to the web terminal.
+#   reset_gpio_pin        GPIO pin pulsed to reset / enter bootloader.
+#   usb_relay_gpio_pin    GPIO pin controlling the radio's USB power relay.
+#   iata                  IATA-style site code used by mctomqtt — must be
+#                         distinct per radio in dual mode (e.g. FH1A/FH1B).
+
+DUAL_RADIO_MODE = os.environ.get("MESHCORE_DUAL_RADIO_MODE", "0") == "1"
+
+
+def _radio_a_config():
+    """Build radio A config from legacy single-radio env vars."""
+    return {
+        "id": "a",
+        "label": os.environ.get("MESHCORE_RADIO_A_LABEL", "Radio"),
+        "serial_port": SERIAL_PORT,
+        "serial_baud": SERIAL_BAUD,
+        "flash_serial_port": FLASH_SERIAL_PORT,
+        "terminal_serial_port": TERMINAL_SERIAL_PORT,
+        "terminal_serial_baud": TERMINAL_SERIAL_BAUD,
+        "reset_gpio_pin": RADIO_RESET_GPIO_PIN,
+        "usb_relay_gpio_pin": USB_RELAY_GPIO_PIN,
+        "iata": os.environ.get("MESHCORE_IATA_A", os.environ.get("MESHCORE_IATA", "")),
+    }
+
+
+def _radio_b_config():
+    """Build radio B config from MESHCORE_*_B env vars. Only loaded when
+    DUAL_RADIO_MODE=1. GPIO pins have no fallback — operator must allocate
+    distinct pins from radio A (default A=reset:4, relay:17)."""
+    reset_pin = os.environ.get("MESHCORE_RADIO_RESET_GPIO_B")
+    relay_pin = os.environ.get("MESHCORE_USB_RELAY_GPIO_B")
+    return {
+        "id": "b",
+        "label": os.environ.get("MESHCORE_RADIO_B_LABEL", "Radio B"),
+        "serial_port": os.environ.get("MESHCORE_SERIAL_PORT_B", "/dev/ttyV0b"),
+        "serial_baud": int(os.environ.get("MESHCORE_SERIAL_BAUD_B", str(SERIAL_BAUD))),
+        "flash_serial_port": os.environ.get("MESHCORE_FLASH_SERIAL_PORT_B", ""),
+        "terminal_serial_port": os.environ.get("MESHCORE_TERMINAL_SERIAL_PORT_B", "/dev/ttyV2b"),
+        "terminal_serial_baud": int(os.environ.get("MESHCORE_TERMINAL_SERIAL_BAUD_B", str(TERMINAL_SERIAL_BAUD))),
+        "reset_gpio_pin": int(reset_pin) if reset_pin else None,
+        "usb_relay_gpio_pin": int(relay_pin) if relay_pin else None,
+        "iata": os.environ.get("MESHCORE_IATA_B", ""),
+    }
+
+
+RADIOS = [_radio_a_config()]
+if DUAL_RADIO_MODE:
+    RADIOS.append(_radio_b_config())
+
+
+def get_radio(radio_id: str):
+    """Look up a radio's config dict by id ('a' / 'b'). Returns None if not configured."""
+    for r in RADIOS:
+        if r["id"] == radio_id:
+            return r
+    return None
