@@ -89,6 +89,26 @@ BQ24074_CE_GPIO = int(os.environ.get("MESHCORE_BQ24074_CE_GPIO", "6"))
 DUAL_RADIO_MODE = os.environ.get("MESHCORE_DUAL_RADIO_MODE", "0") == "1"
 
 
+# Per-radio physical wiring topology.
+#   "single" — one always-connected interface. The same USB device is used for
+#              both normal stats/control and DFU firmware flash. Typical USB-only
+#              installs (mrp, 7theast).
+#   "dual"   — two distinct interfaces. Normal stats run over the serial-logger
+#              firmware on a UART (e.g. /dev/ttyAMA0 via SerialMux's REAL_PORT).
+#              The DFU/USB side is gated by a GPIO relay and is OFF during normal
+#              operation; it only enumerates when the USB relay is enabled for a
+#              firmware flash (hatzic pattern).
+_VALID_INTERFACE_MODES = ("single", "dual")
+
+
+def _interface_mode_from_env(env_var: str, default: str = "single") -> str:
+    """Read an interface_mode env var, validate, fall back to default on bad input."""
+    raw = os.environ.get(env_var, default).strip().lower()
+    if raw not in _VALID_INTERFACE_MODES:
+        return default
+    return raw
+
+
 def _radio_a_config():
     """Build radio A config from legacy single-radio env vars."""
     return {
@@ -102,6 +122,7 @@ def _radio_a_config():
         "reset_gpio_pin": RADIO_RESET_GPIO_PIN,
         "usb_relay_gpio_pin": USB_RELAY_GPIO_PIN,
         "iata": os.environ.get("MESHCORE_IATA_A", os.environ.get("MESHCORE_IATA", "")),
+        "interface_mode": _interface_mode_from_env("MESHCORE_RADIO_INTERFACE_MODE"),
     }
 
 
@@ -122,6 +143,7 @@ def _radio_b_config():
         "reset_gpio_pin": int(reset_pin) if reset_pin else None,
         "usb_relay_gpio_pin": int(relay_pin) if relay_pin else None,
         "iata": os.environ.get("MESHCORE_IATA_B", ""),
+        "interface_mode": _interface_mode_from_env("MESHCORE_RADIO_INTERFACE_MODE_B"),
     }
 
 

@@ -972,6 +972,13 @@
                         <input type="text" id="radio-a-iata" class="settings-input" placeholder="FH1A" />
                     </div>
                     <div class="settings-row">
+                        <label for="radio-a-interface-mode">Interface mode</label>
+                        <select id="radio-a-interface-mode" class="settings-input" style="width:auto;">
+                            <option value="single">Single — always-connected USB</option>
+                            <option value="dual">Dual — serial-logger firmware + USB relay</option>
+                        </select>
+                    </div>
+                    <div class="settings-row">
                         <label for="radio-a-serial">Serial port</label>
                         <input type="text" id="radio-a-serial" class="settings-input" placeholder="/dev/ttyV0" spellcheck="false" />
                     </div>
@@ -1004,6 +1011,13 @@
                     <div class="settings-row">
                         <label for="radio-b-iata">IATA</label>
                         <input type="text" id="radio-b-iata" class="settings-input" placeholder="FH1B" />
+                    </div>
+                    <div class="settings-row">
+                        <label for="radio-b-interface-mode">Interface mode</label>
+                        <select id="radio-b-interface-mode" class="settings-input" style="width:auto;">
+                            <option value="single">Single — always-connected USB</option>
+                            <option value="dual">Dual — serial-logger firmware + USB relay</option>
+                        </select>
                     </div>
                     <div class="settings-row">
                         <label for="radio-b-serial">Serial port</label>

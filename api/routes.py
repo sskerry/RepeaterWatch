@@ -449,6 +449,9 @@ def _radio_listing_entry(radio: dict, poller_radios: dict) -> dict:
         "connected": live.get("serial_connected", False),
         "last_poll": live.get("last_poll", 0),
         "poll_count": live.get("poll_count", 0),
+        # Wiring topology — "single" (one always-on USB) or "dual" (UART for stats
+        # + on-demand USB DFU via relay). See config.py for the full description.
+        "interface_mode": radio.get("interface_mode", "single"),
         # Port stability (visible to all callers)
         "port_stable": port_stable,
         # Identity status (visible to all callers)
@@ -931,6 +934,7 @@ def radios_config_get():
             "reset_gpio_pin": r.get("reset_gpio_pin"),
             "usb_relay_gpio_pin": r.get("usb_relay_gpio_pin"),
             "terminal_serial_port": r.get("terminal_serial_port", ""),
+            "interface_mode": r.get("interface_mode", "single"),
         })
     return jsonify({
         "dual_radio_mode": config.DUAL_RADIO_MODE,
@@ -973,6 +977,8 @@ def radios_config_post():
                     v = r.get(pin_field)
                     if v is not None and not isinstance(v, int):
                         errors.append(f"radio {rid}: {pin_field} must be an integer")
+                if "interface_mode" in r and r["interface_mode"] not in ("single", "dual"):
+                    errors.append(f"radio {rid}: interface_mode must be 'single' or 'dual'")
                 if rid == "a":
                     radio_a = r
                 elif rid == "b":
@@ -1000,6 +1006,8 @@ def radios_config_post():
             _upsert_env("MESHCORE_RADIO_RESET_GPIO", str(radio_a["reset_gpio_pin"]))
         if "usb_relay_gpio_pin" in radio_a and radio_a["usb_relay_gpio_pin"] is not None:
             _upsert_env("MESHCORE_USB_RELAY_GPIO", str(radio_a["usb_relay_gpio_pin"]))
+        if "interface_mode" in radio_a:
+            _upsert_env("MESHCORE_RADIO_INTERFACE_MODE", radio_a["interface_mode"])
 
     if radio_b is not None:
         if "label" in radio_b:
@@ -1016,6 +1024,8 @@ def radios_config_post():
             _upsert_env("MESHCORE_RADIO_RESET_GPIO_B", str(radio_b["reset_gpio_pin"]))
         if "usb_relay_gpio_pin" in radio_b and radio_b["usb_relay_gpio_pin"] is not None:
             _upsert_env("MESHCORE_USB_RELAY_GPIO_B", str(radio_b["usb_relay_gpio_pin"]))
+        if "interface_mode" in radio_b:
+            _upsert_env("MESHCORE_RADIO_INTERFACE_MODE_B", radio_b["interface_mode"])
 
     return jsonify({"ok": True, "restart_required": True})
 
